@@ -13,6 +13,14 @@ const HISTORY_FILE = join(CONFIG_DIR, "history.json");
 export class HistoryManager {
   private history: HistoryEntry[] = [];
 
+  private getEntryTimestampMs(entry: HistoryEntry): number {
+    if (typeof entry.timestampMs === "number") {
+      return entry.timestampMs;
+    }
+    const parsed = Date.parse(entry.timestamp);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+
   async load(): Promise<HistoryEntry[]> {
     if (!existsSync(HISTORY_FILE)) {
       this.history = [];
@@ -42,7 +50,8 @@ export class HistoryManager {
 
     const entry: HistoryEntry = {
       id: randomUUID(),
-      timestamp: new Date().toISOString(),
+      timestamp: new Date().toLocaleString(),
+      timestampMs: Date.now(),
       command,
       args,
       output,
@@ -87,11 +96,11 @@ export class HistoryManager {
     }
 
     if (filter?.startDate) {
-      results = results.filter((e) => new Date(e.timestamp) >= filter.startDate!);
+      results = results.filter((e) => this.getEntryTimestampMs(e) >= filter.startDate!.getTime());
     }
 
     if (filter?.endDate) {
-      results = results.filter((e) => new Date(e.timestamp) <= filter.endDate!);
+      results = results.filter((e) => this.getEntryTimestampMs(e) <= filter.endDate!.getTime());
     }
 
     if (filter?.limit) {

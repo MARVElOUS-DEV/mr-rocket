@@ -26,7 +26,7 @@ export class MrShowCommand extends BaseCommand {
 
     const mrIid = ValidationHelper.validateMRId(args.positional[0]);
 
-    const gitlab = new GitLabService(config.gitlab.host, config.gitlab.token);
+    const gitlab = new GitLabService(config.gitlab.host, config.gitlab.token, config.gitlab.tls);
     const mr = await gitlab.showMergeRequest(projectId, mrIid);
 
     return {

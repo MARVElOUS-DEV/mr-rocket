@@ -1,6 +1,7 @@
 export interface HistoryEntry {
   id: string;
   timestamp: string;
+  timestampMs?: number;
   command: string;
   args: Record<string, unknown>;
   output: CommandOutput;

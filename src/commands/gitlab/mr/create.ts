@@ -33,7 +33,7 @@ export class MrCreateCommand extends BaseCommand {
       title: title ?? "",
     });
 
-    const gitlab = new GitLabService(config.gitlab.host, config.gitlab.token);
+    const gitlab = new GitLabService(config.gitlab.host, config.gitlab.token, config.gitlab.tls);
     const mr = await gitlab.createMergeRequest(projectId, {
       sourceBranch: source!,
       targetBranch: target!,

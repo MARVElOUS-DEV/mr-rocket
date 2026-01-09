@@ -9,6 +9,12 @@ export interface GitLabConfig {
   token: string;
   defaultProjectId?: string;
   defaultBranch?: string;
+  tls?: GitLabTLSConfig;
+}
+
+export interface GitLabTLSConfig {
+  rejectUnauthorized?: boolean;
+  caFile?: string;
 }
 
 export interface UIConfig {
@@ -23,6 +29,10 @@ export const DEFAULT_CONFIG: AppConfig = {
     token: "YOUR_PERSONAL_ACCESS_TOKEN_HERE",
     defaultProjectId: "",
     defaultBranch: "main",
+    tls: {
+      rejectUnauthorized: true,
+      caFile: "",
+    },
   },
   ui: {
     refreshInterval: 10000,

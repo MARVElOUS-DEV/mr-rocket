@@ -45,7 +45,7 @@ export class IssueListCommand extends BaseCommand {
       assigneeId = parsed;
     }
 
-    const gitlab = new GitLabService(config.gitlab.host, config.gitlab.token);
+    const gitlab = new GitLabService(config.gitlab.host, config.gitlab.token, config.gitlab.tls);
     const issues = await gitlab.listIssues(projectId, {
       state,
       search,

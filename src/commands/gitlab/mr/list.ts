@@ -45,7 +45,7 @@ export class MrListCommand extends BaseCommand {
       assigneeId = String(parsed);
     }
 
-    const gitlab = new GitLabService(config.gitlab.host, config.gitlab.token);
+    const gitlab = new GitLabService(config.gitlab.host, config.gitlab.token, config.gitlab.tls);
     const mrs = await gitlab.listMergeRequests(projectId, {
       state,
       search,

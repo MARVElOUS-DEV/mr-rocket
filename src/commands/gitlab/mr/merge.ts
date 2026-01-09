@@ -28,7 +28,7 @@ export class MrMergeCommand extends BaseCommand {
     const squash = args.flags.has("squash");
     const removeSource = args.flags.has("remove-source");
 
-    const gitlab = new GitLabService(config.gitlab.host, config.gitlab.token);
+    const gitlab = new GitLabService(config.gitlab.host, config.gitlab.token, config.gitlab.tls);
     await gitlab.mergeMergeRequest(projectId, mrIid, {
       squash: squash || undefined,
       removeSourceBranch: removeSource || undefined,

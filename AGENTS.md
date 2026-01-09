@@ -153,7 +153,7 @@ Services wrap external APIs and provide type-safe interfaces:
 
 Example (GitLab):
 ```typescript
-const gitlab = new GitLabService(host, token);
+const gitlab = new GitLabService(host, token, config.gitlab.tls);
 const mrs = await gitlab.listMergeRequests(projectId, { state: "opened" });
 ```
 
@@ -166,7 +166,11 @@ Config stored at `~/.mr-rocket/config.json`:
     "host": "https://gitlab.com",
     "token": "YOUR_TOKEN",
     "defaultProjectId": "",
-    "defaultBranch": "main"
+    "defaultBranch": "main",
+    "tls": {
+      "rejectUnauthorized": true,
+      "caFile": ""
+    }
   },
   "ui": {
     "refreshInterval": 10000,

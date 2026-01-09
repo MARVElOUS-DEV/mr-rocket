@@ -2,7 +2,7 @@ import { writeFile, readFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { existsSync } from "node:fs";
-import type { AppConfig, DEFAULT_CONFIG } from "../models/config.js";
+import type { AppConfig } from "../models/config.js";
 import { error, success } from "./colors";
 
 const CONFIG_DIR = join(homedir(), ".mr-rocket");
@@ -22,13 +22,38 @@ export class ConfigManager {
 
     try {
       const content = await readFile(CONFIG_FILE, "utf-8");
-      this.config = JSON.parse(content);
-      this.validateConfig(this.config!);
-      return this.config!;
+      const parsed = JSON.parse(content) as AppConfig;
+      const { DEFAULT_CONFIG } = await import("../models/config.js");
+      const merged = this.mergeConfig(parsed, DEFAULT_CONFIG);
+      this.config = merged;
+      this.validateConfig(this.config);
+      if (JSON.stringify(parsed) !== JSON.stringify(merged)) {
+        await this.save(merged);
+      }
+      return this.config;
     } catch (err) {
       console.error(error("Failed to load config file"));
       throw err;
     }
+  }
+
+  private mergeConfig(config: AppConfig, defaults: AppConfig): AppConfig {
+    return {
+      ...defaults,
+      ...config,
+      gitlab: {
+        ...defaults.gitlab,
+        ...config.gitlab,
+        tls: {
+          ...defaults.gitlab.tls,
+          ...config.gitlab?.tls,
+        },
+      },
+      ui: {
+        ...defaults.ui,
+        ...config.ui,
+      },
+    };
   }
 
   private validateConfig(config: AppConfig): void {
@@ -70,6 +95,13 @@ export class ConfigManager {
 
   getConfigPath(): string {
     return CONFIG_FILE;
+  }
+
+  getConfig(): AppConfig {
+    if (!this.config) {
+      throw new Error("Config not loaded. Call load() first.");
+    }
+    return this.config;
   }
 }
 

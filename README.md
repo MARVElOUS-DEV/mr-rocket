@@ -29,7 +29,11 @@ On first run, a default config will be created at `~/.mr-rocket/config.json`:
     "host": "https://gitlab.com",
     "token": "YOUR_PERSONAL_ACCESS_TOKEN_HERE",
     "defaultProjectId": "",
-    "defaultBranch": "main"
+    "defaultBranch": "main",
+    "tls": {
+      "rejectUnauthorized": true,
+      "caFile": ""
+    }
   },
   "ui": {
     "refreshInterval": 10000,
@@ -41,6 +45,7 @@ On first run, a default config will be created at `~/.mr-rocket/config.json`:
 1. Create a GitLab personal access token at https://gitlab.com/-/user_settings/personal_access_tokens
 2. Update the `token` field in the config file
 3. Optionally set `defaultProjectId` to avoid passing it with every command
+4. If your GitLab uses a custom CA, set `gitlab.tls.caFile` to the PEM file path (or set `rejectUnauthorized` to `false` for local-only testing)
 
 ## Usage
 

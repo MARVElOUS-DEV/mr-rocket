@@ -27,7 +27,7 @@ export class MrApproveCommand extends BaseCommand {
     const mrIid = ValidationHelper.validateMRId(args.positional[0]);
     const message = args.options.get("message");
 
-    const gitlab = new GitLabService(config.gitlab.host, config.gitlab.token);
+    const gitlab = new GitLabService(config.gitlab.host, config.gitlab.token, config.gitlab.tls);
     await gitlab.approveMergeRequest(projectId, mrIid, message);
 
     return {
