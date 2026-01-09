@@ -1,10 +1,35 @@
-import { BaseCommand } from "../../base-command";
-import type { ParsedArgs } from "../../../utils/cli-parser";
-import type { CommandOutput } from "../../../models/command-output";
-import { GitLabService } from "../../../services/gitlab.service";
-import { configManager } from "../../../core/config-manager";
-import { cliParser } from "../../../utils/cli-parser";
-import { ValidationHelper, ValidationError } from "../../../utils/validation";
+import { BaseCommand } from "../../base-command.ts";
+import type { ParsedArgs } from "../../../utils/cli-parser.ts";
+import type { CommandOutput } from "../../../models/command-output.ts";
+import type { AppConfig } from "../../../models/config.ts";
+import type { MRFilter, MergeRequest } from "../../../models/gitlab.ts";
+import type { GitLabService } from "../../../services/gitlab.service.ts";
+import type { SystemService } from "../../../services/system.service.ts";
+import { configManager } from "../../../core/config-manager.ts";
+import { cliParser } from "../../../utils/cli-parser.ts";
+import { ServiceChain } from "../../../core/service-chain.ts";
+import {
+  withConfig,
+  withGitLabService,
+  withSystemService,
+  withTiming,
+  withErrorBoundary,
+  withOutput,
+  withOutputError,
+} from "../../../core/service-chain-steps.ts";
+import { buildErrorOutput } from "../../../core/command-output-helpers.ts";
+import { ValidationError } from "../../../utils/validation.ts";
+
+type MrListChainContext = {
+  args: ParsedArgs;
+  config?: AppConfig;
+  projectId?: string;
+  filter?: MRFilter;
+  gitlab?: GitLabService;
+  system?: SystemService;
+  mrs?: MergeRequest[];
+  output?: CommandOutput;
+};
 
 export class MrListCommand extends BaseCommand {
   name = "mr list";
@@ -12,56 +37,123 @@ export class MrListCommand extends BaseCommand {
   override category = "GitLab";
 
   override async executeInternal(args: ParsedArgs): Promise<CommandOutput> {
-    const config = await configManager.load();
-    const projectId = args.options.get("project") || config.gitlab.defaultProjectId;
+    const context: MrListChainContext = { args };
 
-    if (!projectId) {
-      throw new ValidationError(
-        "Project ID required. Provide via --project flag or config"
-      );
-    }
+    const chain = new ServiceChain<MrListChainContext>()
+      .use(withSystemService())
+      .use(
+        withOutputError((ctx, error) =>
+          buildErrorOutput(error, "Failed to list merge requests")
+        )
+      )
+      .use(
+        withErrorBoundary(async (ctx, error) => {
+          if (ctx.system) {
+            try {
+              await ctx.system.appendCommandLog(`mr list error=${error.message}`);
+            } catch {
+              // Ignore logging failures.
+            }
+          }
+        })
+      )
+      .use(withConfig(() => configManager.load()))
+      .use(async (ctx, next) => {
+        const projectId = ctx.args.options.get("project") || ctx.config?.gitlab.defaultProjectId;
+        if (!projectId) {
+          throw new ValidationError(
+            "Project ID required. Provide via --project flag or config"
+          );
+        }
+        ctx.projectId = String(projectId);
+        await next();
+      })
+      .use((ctx, next) => {
+        const state = ctx.args.options.get("state") as "opened" | "closed" | "merged" | undefined;
+        const search = ctx.args.options.get("search");
+        const labels = cliParser.extractArray(ctx.args.options, "labels");
+        const author = ctx.args.options.get("author");
+        const assignee = ctx.args.options.get("assignee");
 
-    const state = args.options.get("state") as "opened" | "closed" | "merged" | undefined;
-    const search = args.options.get("search");
-    const labels = cliParser.extractArray(args.options, "labels");
-    const author = args.options.get("author");
-    const assignee = args.options.get("assignee");
+        let authorId: number | undefined;
+        if (author) {
+          const parsed = parseInt(author, 10);
+          if (isNaN(parsed) || parsed <= 0) {
+            throw new ValidationError(`Invalid author ID: ${author}. Must be a positive number.`);
+          }
+          authorId = parsed;
+        }
 
-    let authorId: number | undefined;
-    if (author) {
-      const parsed = parseInt(author, 10);
-      if (isNaN(parsed) || parsed <= 0) {
-        throw new ValidationError(`Invalid author ID: ${author}. Must be a positive number.`);
+        let assigneeId: string | undefined;
+        if (assignee) {
+          const parsed = parseInt(assignee, 10);
+          if (isNaN(parsed) || parsed <= 0) {
+            throw new ValidationError(`Invalid assignee ID: ${assignee}. Must be a positive number.`);
+          }
+          assigneeId = String(parsed);
+        }
+
+        ctx.filter = {
+          state,
+          search,
+          labels: labels.length > 0 ? labels : undefined,
+          authorId,
+          assigneeId,
+        };
+
+        return next();
+      })
+      .use(withGitLabService())
+      .use(async (ctx, next) => {
+        if (!ctx.gitlab || !ctx.projectId) {
+          throw new Error("Missing GitLab context for request");
+        }
+        ctx.mrs = await ctx.gitlab.listMergeRequests(ctx.projectId, ctx.filter ?? {});
+        return next();
+      })
+      .use(
+        withTiming("mr list", async (ctx, durationMs) => {
+          if (ctx.system) {
+            try {
+              await ctx.system.appendCommandLog(`mr list durationMs=${durationMs}`);
+            } catch {
+              // Ignore logging failures.
+            }
+          }
+        })
+      )
+      .use(async (ctx, next) => {
+        if (ctx.system) {
+          try {
+            const count = ctx.mrs?.length ?? 0;
+            await ctx.system.appendCommandLog(`mr list count=${count}`);
+          } catch {
+            // Non-critical audit log failure should not block command output.
+          }
+        }
+        return next();
+      })
+      .use(withOutput((ctx) => {
+        const mrs = ctx.mrs ?? [];
+        return {
+          success: true,
+          data: mrs,
+          message: `Found ${mrs.length} merge requests`,
+          meta: {
+            count: mrs.length,
+          },
+        };
+      }));
+
+    await chain.run(context);
+
+    return (
+      context.output ?? {
+        success: false,
+        message: "Service chain did not produce output",
+        error: new Error("Service chain did not produce output"),
       }
-      authorId = parsed;
-    }
-
-    let assigneeId: string | undefined;
-    if (assignee) {
-      const parsed = parseInt(assignee, 10);
-      if (isNaN(parsed) || parsed <= 0) {
-        throw new ValidationError(`Invalid assignee ID: ${assignee}. Must be a positive number.`);
-      }
-      assigneeId = String(parsed);
-    }
-
-    const gitlab = new GitLabService(config.gitlab.host, config.gitlab.token, config.gitlab.tls);
-    const mrs = await gitlab.listMergeRequests(projectId, {
-      state,
-      search,
-      labels: labels.length > 0 ? labels : undefined,
-      authorId,
-      assigneeId,
-    });
-
-    return {
-      success: true,
-      data: mrs,
-      message: `Found ${mrs.length} merge requests`,
-      meta: {
-        count: mrs.length,
-      },
-    };
+    );
   }
 
   override printHelp(): string {

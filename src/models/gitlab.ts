@@ -48,6 +48,12 @@ export interface Issue {
   labels: string[];
 }
 
+export interface ProjectUpload {
+  url: string;
+  markdown: string;
+  alt: string;
+}
+
 export interface CreateMRParams {
   sourceBranch: string;
   targetBranch: string;

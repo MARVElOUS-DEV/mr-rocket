@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { createReadStream, existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { logger } from "../core/logger.js";
 import type { GitLabTLSConfig } from "../models/config.js";
@@ -9,6 +9,7 @@ import type {
   IssueFilter,
   MergeRequest,
   Issue,
+  ProjectUpload,
 } from "../models/gitlab.js";
 
 let GitlabModule: typeof import("@gitbeaker/rest");
@@ -147,6 +148,60 @@ export class GitLabService {
     } catch (err) {
       logger.error("Failed to create merge request", err);
       throw new Error(`Failed to create merge request: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  async getLatestCommitTitle(
+    projectId: number | string,
+    branch: string
+  ): Promise<string> {
+    const api = await this.ensureInitialized();
+    logger.debug("Fetching latest commit title", { projectId, branch });
+    try {
+      const commits = await api.Commits.all(projectId, {
+        refName: branch,
+        perPage: 1,
+        page: 1,
+      });
+      const commit = (commits as Array<Record<string, unknown>>)[0];
+      if (!commit) {
+        return "";
+      }
+      const title = typeof commit.title === "string" ? commit.title.trim() : "";
+      if (title) {
+        return title;
+      }
+      const message = typeof commit.message === "string" ? commit.message : "";
+      return message.split("\n")[0]?.trim() || "";
+    } catch (err) {
+      logger.error("Failed to fetch latest commit title", err);
+      throw new Error(
+        `Failed to fetch latest commit title: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+
+  async uploadProjectFile(
+    projectId: number | string,
+    filePath: string
+  ): Promise<ProjectUpload> {
+    const api = await this.ensureInitialized();
+    logger.debug("Uploading project file", { projectId, filePath });
+    if (!existsSync(filePath)) {
+      throw new Error(`File not found: ${filePath}`);
+    }
+    try {
+      const upload = await api.Projects.upload(projectId, createReadStream(filePath));
+      return {
+        url: String(upload.url),
+        markdown: String(upload.markdown),
+        alt: String(upload.alt || ""),
+      };
+    } catch (err) {
+      logger.error("Failed to upload project file", err);
+      throw new Error(
+        `Failed to upload project file: ${err instanceof Error ? err.message : String(err)}`
+      );
     }
   }
 

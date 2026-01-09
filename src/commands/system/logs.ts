@@ -1,6 +1,6 @@
-import { BaseCommand } from "../base-command.js";
-import type { ParsedArgs } from "../../utils/cli-parser.js";
-import type { CommandOutput } from "../../models/command-output.js";
+import { BaseCommand } from "../base-command.ts";
+import type { ParsedArgs } from "../../utils/cli-parser.ts";
+import type { CommandOutput } from "../../models/command-output.ts";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";

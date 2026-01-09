@@ -4,7 +4,7 @@
     "host": "https://gitlab.com",
     "token": "YOUR_PERSONAL_ACCESS_TOKEN_HERE",
     "defaultProjectId": "",
-    "defaultBranch": "main"
+    "defaultBranch": "master"
   },
   "ui": {
     "refreshInterval": 10000,
