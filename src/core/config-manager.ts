@@ -49,6 +49,10 @@ export class ConfigManager {
           ...config.gitlab?.tls,
         },
       },
+      confluence: {
+        ...defaults.confluence,
+        ...config.confluence,
+      },
       ui: {
         ...defaults.ui,
         ...config.ui,

@@ -17,6 +17,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "confluence.js": "^1.7.1",
     "@gitbeaker/rest": "^40.0.3",
     "@opentui/core": "^0.1.69",
     "@opentui/react": "^0.1.69",

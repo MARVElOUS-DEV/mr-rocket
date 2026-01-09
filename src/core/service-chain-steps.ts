@@ -3,6 +3,7 @@ import type { CommandOutput } from "../models/command-output.ts";
 import type { ServiceChainStep } from "./service-chain.ts";
 import { GitLabService } from "../services/gitlab.service.ts";
 import { SystemService } from "../services/system.service.ts";
+import { ConfluenceService } from "../services/confluence.service.ts";
 
 export const withConfig = <T extends { config?: AppConfig }>(
   loadConfig: () => Promise<AppConfig>
@@ -27,6 +28,24 @@ export const withGitLabService = <
       ((config: AppConfig) =>
         new GitLabService(config.gitlab.host, config.gitlab.token, config.gitlab.tls));
     ctx.gitlab = factory(ctx.config);
+    await next();
+  };
+};
+
+export const withConfluenceService = <
+  T extends { config?: AppConfig; confluence?: ConfluenceService }
+>(
+  createService?: (config: AppConfig) => ConfluenceService
+): ServiceChainStep<T> => {
+  return async (ctx, next) => {
+    if (!ctx.config) {
+      throw new Error("Missing config for Confluence service");
+    }
+    const factory =
+      createService ??
+      ((config: AppConfig) =>
+        new ConfluenceService(config.confluence.host, config.confluence.token));
+    ctx.confluence = factory(ctx.config);
     await next();
   };
 };

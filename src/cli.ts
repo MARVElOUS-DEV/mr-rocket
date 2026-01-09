@@ -11,6 +11,8 @@ import { MrShowCommand } from "./commands/gitlab/mr/show";
 import { IssueCreateCommand } from "./commands/gitlab/issue/create";
 import { IssueListCommand } from "./commands/gitlab/issue/list";
 import { LogsCommand } from "./commands/system/logs";
+import { WikiSearchCommand } from "./commands/wiki/search";
+import { WikiReadCommand } from "./commands/wiki/read";
 
 async function main() {
   const parsed = cliParser.parse(process.argv);
@@ -67,5 +69,7 @@ commandRegistry.register(new MrShowCommand());
 commandRegistry.register(new IssueCreateCommand());
 commandRegistry.register(new IssueListCommand());
 commandRegistry.register(new LogsCommand());
+commandRegistry.register(new WikiSearchCommand());
+commandRegistry.register(new WikiReadCommand());
 
 main();
