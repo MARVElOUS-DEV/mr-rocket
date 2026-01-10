@@ -1,7 +1,8 @@
 declare module "confluence.js" {
   export interface ConfluenceClientOptions {
     host: string;
-    authentication: {
+    baseRequestConfig?: Record<string, unknown>;
+    authentication?: {
       personalAccessToken: string;
     };
   }
@@ -9,7 +10,7 @@ declare module "confluence.js" {
   export class ConfluenceClient {
     constructor(options: ConfluenceClientOptions);
     search: {
-      searchContent(params: Record<string, unknown>): Promise<unknown>;
+      searchByCQL(params: Record<string, unknown>): Promise<unknown>;
     };
     content: {
       getContentById(id: string, params?: Record<string, unknown>): Promise<unknown>;

@@ -44,7 +44,7 @@ export const withConfluenceService = <
     const factory =
       createService ??
       ((config: AppConfig) =>
-        new ConfluenceService(config.confluence.host, config.confluence.token));
+        new ConfluenceService(config.confluence.host, config.confluence.token, config.confluence.tls));
     ctx.confluence = factory(ctx.config);
     await next();
   };

@@ -2,6 +2,7 @@ import { BaseCommand } from "../base-command.ts";
 import type { ParsedArgs } from "../../utils/cli-parser.ts";
 import type { CommandOutput } from "../../models/command-output.ts";
 import { configManager } from "../../core/config-manager.ts";
+import { logger } from "../../core/logger.ts";
 import { ConfluenceService } from "../../services/confluence.service.ts";
 import { ValidationError, ValidationHelper } from "../../utils/validation.ts";
 
@@ -28,8 +29,10 @@ export class WikiReadCommand extends BaseCommand {
 
     const confluence = new ConfluenceService(
       config.confluence.host,
-      config.confluence.token
+      config.confluence.token,
+      config.confluence.tls
     );
+    logger.debug("Executing wiki read", { title, spaceKey, host: config.confluence.host });
     const page = await confluence.readPage(title, spaceKey);
 
     return {

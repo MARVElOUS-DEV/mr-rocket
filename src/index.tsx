@@ -5,8 +5,10 @@ import { initializeTUI, createTUIRoot, cleanupTUI } from "./tui/client.js";
 import { getStore } from "./tui/store.js";
 import { Dashboard } from "./tui/components/dashboard.js";
 import { MRList } from "./tui/components/mr-list.js";
+import { MRCreate } from "./tui/components/mr-create.js";
 import { IssueList } from "./tui/components/issue-list.js";
 import { HistoryList } from "./tui/components/history-list.js";
+import { WikiSearch } from "./tui/components/wiki-search.js";
 import { type AppState } from "./tui/types.js";
 
 function App() {
@@ -21,17 +23,26 @@ function App() {
 
   useKeyboard((key) => {
     const input = key.name;
+    if (state.currentScreen === "mr-create") {
+      return;
+    }
     if (input === "q") {
       cleanupTUI();
       process.exit(0);
+    } else if (input === "escape") {
+      store.dispatch({ type: "NAVIGATE", screen: "dashboard" });
     } else if (input === "b") {
       store.dispatch({ type: "NAVIGATE", screen: "dashboard" });
     } else if (input === "m") {
       store.dispatch({ type: "NAVIGATE", screen: "mr-list" });
+    } else if (input === "c") {
+      store.dispatch({ type: "NAVIGATE", screen: "mr-create" });
     } else if (input === "i") {
       store.dispatch({ type: "NAVIGATE", screen: "issue-list" });
     } else if (input === "h") {
       store.dispatch({ type: "NAVIGATE", screen: "history" });
+    } else if (input === "w") {
+      store.dispatch({ type: "NAVIGATE", screen: "wiki-search" });
     }
   });
 
@@ -41,10 +52,14 @@ function App() {
         return <Dashboard />;
       case "mr-list":
         return <MRList />;
+      case "mr-create":
+        return <MRCreate />;
       case "issue-list":
         return <IssueList />;
       case "history":
         return <HistoryList />;
+      case "wiki-search":
+        return <WikiSearch />;
       default:
         return (
           <box flexDirection="column" alignItems="center" justifyContent="center" flexGrow={1}>

@@ -52,6 +52,10 @@ export class ConfigManager {
       confluence: {
         ...defaults.confluence,
         ...config.confluence,
+        tls: {
+          ...defaults.confluence.tls,
+          ...config.confluence?.tls,
+        },
       },
       ui: {
         ...defaults.ui,

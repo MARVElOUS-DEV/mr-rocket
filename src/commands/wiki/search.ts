@@ -2,6 +2,7 @@ import { BaseCommand } from "../base-command.ts";
 import type { ParsedArgs } from "../../utils/cli-parser.ts";
 import type { CommandOutput } from "../../models/command-output.ts";
 import { configManager } from "../../core/config-manager.ts";
+import { logger } from "../../core/logger.ts";
 import { ConfluenceService } from "../../services/confluence.service.ts";
 import { ValidationError, ValidationHelper } from "../../utils/validation.ts";
 
@@ -48,8 +49,10 @@ export class WikiSearchCommand extends BaseCommand {
 
     const confluence = new ConfluenceService(
       config.confluence.host,
-      config.confluence.token
+      config.confluence.token,
+      config.confluence.tls
     );
+    logger.debug("Executing wiki search", { query, limit, offset, spaceKey, host: config.confluence.host });
     const results = await confluence.searchPages(query, { limit, offset, spaceKey });
 
     return {

@@ -22,6 +22,12 @@ export interface ConfluenceConfig {
   host: string;
   token: string;
   defaultSpaceKey?: string;
+  tls?: ConfluenceTLSConfig;
+}
+
+export interface ConfluenceTLSConfig {
+  rejectUnauthorized?: boolean;
+  caFile?: string;
 }
 
 export interface UIConfig {
@@ -45,6 +51,10 @@ export const DEFAULT_CONFIG: AppConfig = {
     host: "https://your-domain.atlassian.net/wiki",
     token: "YOUR_CONFLUENCE_PAT_HERE",
     defaultSpaceKey: "",
+    tls: {
+      rejectUnauthorized: true,
+      caFile: "",
+    },
   },
   ui: {
     refreshInterval: 10000,

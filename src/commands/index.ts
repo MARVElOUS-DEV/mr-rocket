@@ -22,10 +22,11 @@ class CommandRegistry {
   }
 
   async execute(parsed: ParsedArgs): Promise<boolean> {
-    const command = this.get(parsed.positional[0] || "help");
+    const match = this.resolveCommand(parsed);
+    const command = match?.command;
 
     if (!command) {
-      console.log(error(`Unknown command: ${parsed.positional[0]}`));
+      console.log(error(`Unknown command: ${parsed.positional[0] || ""}`));
       this.printGlobalHelp();
       return false;
     }
@@ -36,7 +37,7 @@ class CommandRegistry {
     }
 
     try {
-      const output = await command.execute(parsed);
+      const output = await command.execute(match?.parsed ?? parsed);
 
       if (output.success) {
         if (output.message) {
@@ -51,6 +52,32 @@ class CommandRegistry {
       console.log(error(err instanceof Error ? err.message : String(err)));
       return false;
     }
+  }
+
+  private resolveCommand(
+    parsed: ParsedArgs
+  ): { command: Command; parsed: ParsedArgs } | null {
+    if (parsed.positional.length === 0) {
+      return null;
+    }
+
+    const candidates = this.getAll()
+      .map((cmd) => ({ cmd, tokens: cmd.name.split(" ") }))
+      .sort((a, b) => b.tokens.length - a.tokens.length);
+
+    for (const candidate of candidates) {
+      const tokens = candidate.tokens;
+      const matches = tokens.every((token, index) => parsed.positional[index] === token);
+      if (matches) {
+        const trimmed: ParsedArgs = {
+          ...parsed,
+          positional: parsed.positional.slice(tokens.length),
+        };
+        return { command: candidate.cmd, parsed: trimmed };
+      }
+    }
+
+    return null;
   }
 
   printGlobalHelp(): void {

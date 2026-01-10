@@ -1,12 +1,20 @@
 import { createCliRenderer } from "@opentui/core";
+import type { PasteEvent } from "@opentui/core";
 import { createRoot } from "@opentui/react";
 import { configManager } from "../core/config-manager.js";
 import { GitLabService } from "../services/gitlab.service.js";
+import { ConfluenceService } from "../services/confluence.service.js";
 import { TUIContext } from "./context.js";
 
 let renderer: any = null;
 let gitlabService: GitLabService | null = null;
+let confluenceService: ConfluenceService | null = null;
 let isInitialized = false;
+
+type PasteInsertTarget = {
+  insertText?: (text: string) => void;
+  handlePaste?: (event: PasteEvent) => void;
+};
 
 export async function initializeTUI(): Promise<void> {
   if (isInitialized) {
@@ -34,9 +42,23 @@ export async function initializeTUI(): Promise<void> {
   gitlabService = new GitLabService(config.gitlab.host, config.gitlab.token, config.gitlab.tls);
   await gitlabService.init();
 
-  renderer = await createCliRenderer();
+  renderer = await createCliRenderer({ useMouse: false });
   isInitialized = true;
   await renderer.setupTerminal();
+
+  renderer.keyInput.on("paste", (event: PasteEvent) => {
+    const target = renderer.currentFocusedRenderable as PasteInsertTarget | null;
+    if (!target) {
+      return;
+    }
+    if (typeof target.handlePaste === "function") {
+      return;
+    }
+    if (typeof target.insertText === "function") {
+      target.insertText(event.text);
+      event.preventDefault();
+    }
+  });
 }
 
 export function getRenderer(): any {
@@ -53,6 +75,30 @@ export function getGitLabService(): GitLabService {
   return gitlabService;
 }
 
+export function getConfluenceService(): ConfluenceService {
+  if (confluenceService) {
+    return confluenceService;
+  }
+
+  const config = configManager.getConfig();
+  if (!config.confluence?.host) {
+    throw new Error("Confluence host is not configured. Please edit ~/.mr-rocket/config.json");
+  }
+  if (
+    !config.confluence.token ||
+    config.confluence.token === "YOUR_CONFLUENCE_PAT_HERE"
+  ) {
+    throw new Error("Confluence token is not configured. Please edit ~/.mr-rocket/config.json");
+  }
+
+  confluenceService = new ConfluenceService(
+    config.confluence.host,
+    config.confluence.token,
+    config.confluence.tls
+  );
+  return confluenceService;
+}
+
 export function createTUIRoot(): any {
   return createRoot(getRenderer());
 }
@@ -63,5 +109,6 @@ export function cleanupTUI(): void {
     renderer = null;
   }
   gitlabService = null;
+  confluenceService = null;
   isInitialized = false;
 }

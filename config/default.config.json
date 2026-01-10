@@ -6,6 +6,11 @@
     "defaultProjectId": "",
     "defaultBranch": "master"
   },
+  "confluence": {
+    "host": "https://your-domain.atlassian.net/wiki",
+    "token": "YOUR_CONFLUENCE_PAT_HERE",
+    "defaultSpaceKey": ""
+  },
   "ui": {
     "refreshInterval": 10000,
     "maxHistoryItems": 1000

@@ -57,7 +57,7 @@ export function MRList() {
       )}
 
       <box paddingTop={1}>
-        <text attributes={TextAttributes.DIM}>[b] Back to Dashboard</text>
+        <text attributes={TextAttributes.DIM}>Esc back</text>
       </box>
     </box>
   );

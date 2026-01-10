@@ -20,11 +20,11 @@ import {
 } from "../../../core/service-chain-steps.ts";
 import { buildErrorOutput } from "../../../core/command-output-helpers.ts";
 import { ValidationHelper, ValidationError } from "../../../utils/validation.ts";
-import { existsSync } from "node:fs";
-import { isAbsolute, resolve } from "node:path";
+import { prepareDescriptionWithUploads } from "../../../utils/description-images.ts";
 
 type MrCreateChainContext = {
   args: ParsedArgs;
+  stdinDescription?: string;
   config?: AppConfig;
   projectId?: string;
   source?: string;
@@ -45,7 +45,11 @@ export class MrCreateCommand extends BaseCommand {
   override category = "GitLab";
 
   override async executeInternal(args: ParsedArgs): Promise<CommandOutput> {
-    const context: MrCreateChainContext = { args };
+    const stdinDescription =
+      args.flags.has("description-stdin") && !args.options.get("description")
+        ? await this.readDescriptionFromStdin(args.json)
+        : undefined;
+    const context: MrCreateChainContext = { args, stdinDescription };
 
     const chain = new ServiceChain<MrCreateChainContext>()
       .use(withSystemService())
@@ -88,7 +92,7 @@ export class MrCreateCommand extends BaseCommand {
         ctx.source = ctx.args.options.get("source");
         ctx.target =
           ctx.args.options.get("target") || ctx.config?.gitlab.defaultBranch || "master";
-        ctx.description = ctx.args.options.get("description");
+        ctx.description = ctx.args.options.get("description") ?? ctx.stdinDescription;
         ctx.labels = cliParser.extractArray(ctx.args.options, "labels");
 
         ValidationHelper.required(ctx.source, "sourceBranch");
@@ -114,7 +118,7 @@ export class MrCreateCommand extends BaseCommand {
         });
 
         if (ctx.description) {
-          ctx.preparedDescription = await this.replaceLocalImagesWithUploads(
+          ctx.preparedDescription = await prepareDescriptionWithUploads(
             ctx.gitlab,
             ctx.projectId,
             ctx.description
@@ -180,6 +184,7 @@ export class MrCreateCommand extends BaseCommand {
     help += "  --target <branch>     Target branch (default: master)\n";
     help += "  --title <title>       MR title (default: latest commit title)\n";
     help += "  --description <text>  MR description (uploads local images)\n";
+    help += "  --description-stdin   Read MR description from stdin (supports pasted images)\n";
     help += "  --labels <l1,l2>      Comma-separated labels\n";
     help += "  --project <id>        Project ID\n\n";
     help += "Example:\n";
@@ -187,57 +192,26 @@ export class MrCreateCommand extends BaseCommand {
     return help;
   }
 
-  private async replaceLocalImagesWithUploads(
-    gitlab: GitLabService,
-    projectId: number | string,
-    description: string
-  ): Promise<string> {
-    const imageRegex = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
-    const matches = Array.from(description.matchAll(imageRegex));
-    if (matches.length === 0) {
-      return description;
+  private async readDescriptionFromStdin(jsonMode: boolean): Promise<string> {
+    if (process.stdin.isTTY) {
+      const hint = "Paste or type the MR description, then press Ctrl+D to finish.\n";
+      if (jsonMode) {
+        process.stderr.write(hint);
+      } else {
+        process.stdout.write(hint);
+      }
     }
 
-    const uploadCache = new Map<string, string>();
-    let updated = description;
-
-    for (const match of matches) {
-      const fullMatch = match[0];
-      const altText = match[1] ?? "";
-      const imagePath = match[2] ?? "";
-
-      if (this.isRemoteImageReference(imagePath)) {
-        continue;
-      }
-
-      const resolvedPath = isAbsolute(imagePath)
-        ? imagePath
-        : resolve(process.cwd(), imagePath);
-
-      if (!existsSync(resolvedPath)) {
-        throw new ValidationError(`Image file not found: ${resolvedPath}`);
-      }
-
-      const cachedUrl = uploadCache.get(resolvedPath);
-      const uploadUrl =
-        cachedUrl ?? (await gitlab.uploadProjectFile(projectId, resolvedPath)).url;
-
-      uploadCache.set(resolvedPath, uploadUrl);
-      const replacement = `![${altText}](${uploadUrl})`;
-      updated = updated.replaceAll(fullMatch, replacement);
-    }
-
-    return updated;
-  }
-
-  private isRemoteImageReference(pathValue: string): boolean {
-    const trimmed = pathValue.trim();
-    return (
-      trimmed.startsWith("http://") ||
-      trimmed.startsWith("https://") ||
-      trimmed.startsWith("data:") ||
-      trimmed.startsWith("/uploads/") ||
-      trimmed.startsWith("/-/uploads/")
-    );
+    return await new Promise((resolve, reject) => {
+      let buffer = "";
+      process.stdin.setEncoding("utf8");
+      process.stdin.on("data", (chunk) => {
+        buffer += chunk;
+      });
+      process.stdin.on("end", () => {
+        resolve(buffer.trimEnd());
+      });
+      process.stdin.on("error", reject);
+    });
   }
 }

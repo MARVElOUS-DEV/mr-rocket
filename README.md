@@ -35,6 +35,11 @@ On first run, a default config will be created at `~/.mr-rocket/config.json`:
       "caFile": ""
     }
   },
+  "confluence": {
+    "host": "https://your-domain.atlassian.net/wiki",
+    "token": "YOUR_CONFLUENCE_PAT_HERE",
+    "defaultSpaceKey": ""
+  },
   "ui": {
     "refreshInterval": 10000,
     "maxHistoryItems": 1000
@@ -57,6 +62,9 @@ bun run cli --help
 
 # Create a merge request
 bun run cli mr create --source feature/new --target main --title "Add new feature"
+
+# Create a merge request with pasted images in the description
+bun run cli mr create --source feature/new --target main --description-stdin
 
 # List open merge requests
 bun run cli mr list --state opened

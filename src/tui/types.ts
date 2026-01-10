@@ -1,6 +1,14 @@
 import type { MergeRequest, Issue } from "../models/gitlab.js";
 
-export type Screen = "dashboard" | "mr-list" | "mr-detail" | "issue-list" | "issue-detail" | "history";
+export type Screen =
+  | "dashboard"
+  | "mr-list"
+  | "mr-create"
+  | "mr-detail"
+  | "issue-list"
+  | "issue-detail"
+  | "wiki-search"
+  | "history";
 
 export interface AppState {
   currentScreen: Screen;

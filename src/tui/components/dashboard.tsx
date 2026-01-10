@@ -12,7 +12,9 @@ export function Dashboard() {
         <text>Dashboard</text>
         <text attributes={TextAttributes.DIM}>Use keyboard to navigate:</text>
         <text attributes={TextAttributes.DIM}>  [m] View Merge Requests</text>
+        <text attributes={TextAttributes.DIM}>  [c] Create Merge Request</text>
         <text attributes={TextAttributes.DIM}>  [i] View Issues</text>
+        <text attributes={TextAttributes.DIM}>  [w] Search Wiki</text>
         <text attributes={TextAttributes.DIM}>  [h] View History</text>
         <text attributes={TextAttributes.DIM}>  [q] Quit</text>
       </box>
