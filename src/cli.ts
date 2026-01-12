@@ -3,6 +3,7 @@ import { commandRegistry } from "./commands/index";
 import { configManager } from "./core/config-manager";
 import { outputFormatter } from "./core/output-formatter";
 import { logger, LogLevel } from "./core/logger";
+import { fileURLToPath } from "node:url";
 import { MrCreateCommand } from "./commands/gitlab/mr/create";
 import { MrListCommand } from "./commands/gitlab/mr/list";
 import { MrApproveCommand } from "./commands/gitlab/mr/approve";
@@ -23,15 +24,29 @@ async function main() {
 
   if (parsed.positional[0] === "ui" || parsed.positional[0] === "tui") {
     const { spawn } = await import("node:child_process");
-    const child = spawn("bun", ["run", "src/index.tsx"], {
+    const tuiEntry = fileURLToPath(new URL("./index.tsx", import.meta.url));
+    const child = spawn("bun", ["run", tuiEntry], {
       stdio: "inherit",
       shell: true,
     });
-    
-    await new Promise((resolve) => {
-      child.on("exit", resolve);
+
+    const { exitCode, signal } = await new Promise<{
+      exitCode: number | null;
+      signal: NodeJS.Signals | null;
+    }>((resolve, reject) => {
+      child.on("error", reject);
+      child.on("exit", (code, sig) => resolve({ exitCode: code, signal: sig }));
     });
-    return;
+
+    if (typeof exitCode === "number") {
+      process.exit(exitCode);
+    }
+
+    if (signal) {
+      process.exit(1);
+    }
+
+    process.exit(0);
   }
 
   if (parsed.positional.length === 0 || parsed.help) {

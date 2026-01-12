@@ -1,12 +1,12 @@
 import { createCliRenderer } from "@opentui/core";
-import type { PasteEvent } from "@opentui/core";
+import type { CliRenderer, PasteEvent } from "@opentui/core";
 import { createRoot } from "@opentui/react";
 import { configManager } from "../core/config-manager.js";
 import { GitLabService } from "../services/gitlab.service.js";
 import { ConfluenceService } from "../services/confluence.service.js";
 import { TUIContext } from "./context.js";
 
-let renderer: any = null;
+let renderer: CliRenderer| null = null;
 let gitlabService: GitLabService | null = null;
 let confluenceService: ConfluenceService | null = null;
 let isInitialized = false;
@@ -44,10 +44,9 @@ export async function initializeTUI(): Promise<void> {
 
   renderer = await createCliRenderer({ useMouse: false });
   isInitialized = true;
-  await renderer.setupTerminal();
 
   renderer.keyInput.on("paste", (event: PasteEvent) => {
-    const target = renderer.currentFocusedRenderable as PasteInsertTarget | null;
+    const target = getRenderer().currentFocusedRenderable as PasteInsertTarget | null;
     if (!target) {
       return;
     }

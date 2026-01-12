@@ -1,3 +1,5 @@
+import type { CommandOutput } from "./command-output.js";
+
 export interface HistoryEntry {
   id: string;
   timestamp: string;
@@ -15,12 +17,4 @@ export interface HistoryFilter {
   startDate?: Date;
   endDate?: Date;
   limit?: number;
-}
-
-export interface CommandOutput {
-  success: boolean;
-  data?: unknown;
-  error?: Error;
-  message?: string;
-  meta?: Record<string, unknown>;
 }

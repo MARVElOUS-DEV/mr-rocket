@@ -232,8 +232,13 @@ async function writeDataUriToTempFile(dataUri: string): Promise<string> {
   if (!match) {
     throw new ValidationError("Unsupported data URI image format");
   }
-  const extension = normalizeExtension(match[1]);
-  const buffer = decodeBase64Buffer(match[2]);
+  const matchExtension = match[1];
+  const matchBuffer = match[2];
+  if (!matchExtension || !matchBuffer) {
+    throw new ValidationError("Unsupported data URI image format");
+  }
+  const extension = normalizeExtension(matchExtension);
+  const buffer = decodeBase64Buffer(matchBuffer);
   if (buffer.length === 0) {
     throw new ValidationError("Empty data URI image");
   }

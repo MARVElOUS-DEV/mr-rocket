@@ -2,26 +2,46 @@
 
 This file provides guidance for agentic coding tools working in this repository.
 
+## Project Structure (Current)
+
+```
+mr-rocket/
+├── src/              # CLI/TUI application (currently lives at repo root)
+├── packages/
+│   ├── extension/     # Chrome extension with WXT (@mr-rocket/extension)
+│   └── shared/        # Shared types and utilities (@mr-rocket/shared)
+├── scripts/           # Installation and setup scripts
+├── docs/              # Documentation
+├── config/            # Configuration examples
+└── package.json       # Root workspace configuration
+```
+
+**Note**: A future migration may move the root CLI/TUI app into `packages/cli/`. See `docs/MONOREPO_MIGRATION.md`.
+
 ## Build & Development Commands
 
 ```bash
-# Install dependencies
+# Install all dependencies (from root)
 bun install
 
-# Run CLI (headless mode)
-bun run cli --help
+# CLI Commands (from root)
+bun run cli --help              # Run CLI help
 bun run cli mr list --state opened
+bun run tui                     # Run TUI mode
+bun run dev                     # Run CLI in watch mode
+bun run build:cli               # Build standalone CLI binary
+bun run build:tui               # Build standalone TUI binary
 
-# Run TUI (interactive mode)
-bun run tui
-bun dev
+# Extension Commands (from root)
+bun run --filter @mr-rocket/extension dev    # Start extension dev server with HMR
+bun run --filter @mr-rocket/extension build  # Build extension for production
+bun run --filter @mr-rocket/extension zip    # Build and zip extension
 
-# Direct execution (no build step)
-bun run src/cli.ts
-bun run src/index.tsx
+# Direct package execution
+bun run --filter @mr-rocket/extension dev
 ```
 
-**Note**: This project uses Bun runtime with no separate build step. TypeScript files are executed directly.
+**Note**: This project uses Bun workspaces. TypeScript files are executed directly by Bun.
 
 ## Testing
 
@@ -31,20 +51,18 @@ No test framework is currently configured in this project.
 
 Mr-Rocket is an extensible CLI/TUI tool for daily workflow automation. It supports both headless mode (scriptable, JSON output) and TUI mode (interactive, history viewing, real-time status).
 
-**Tech Stack:**
-- Runtime: Bun
-- Language: TypeScript (ESNext target)
-- CLI Parsing: Built-in `bun.argv` + custom parser
-- UI Framework: React 19 + OpenTUI (@opentui/react, @opentui/core)
-- GitLab API: @gitbeaker/rest
-- Config: JSON (stored in ~/.mr-rocket/)
-- JSX: react-jsx transformation with @opentui/react as import source
+### Packages
 
-**Architecture:**
-- Command Pattern: Each workflow action is a self-contained command
-- Service Layer: API integrations (GitLab, future Confluence)
-- Shared Core: Same business logic for CLI and TUI
-- History Management: Command execution logging with query support
+- **Root CLI/TUI app**: Main CLI/TUI application (not yet moved into a workspace package)
+  - Tech: Bun, TypeScript, React 19 + OpenTUI
+  - Entry: `src/cli.ts` (CLI), `src/index.tsx` (TUI)
+
+- **@mr-rocket/extension**: Chrome extension for CDP authentication
+  - Tech: WXT framework, React, TypeScript
+  - Entry: `packages/extension/src/entrypoints/`
+
+- **@mr-rocket/shared**: Shared types between CLI and extension
+  - Contains: CDP auth types, common interfaces
 
 ## Code Style Guidelines
 
@@ -53,33 +71,18 @@ Mr-Rocket is an extensible CLI/TUI tool for daily workflow automation. It suppor
 - No unchecked indexed access (`noUncheckedIndexedAccess: true`)
 - No implicit override (`noImplicitOverride: true`)
 - No fallthrough cases in switch
-- Verbatim module syntax: explicit file extensions required in imports
+- Verbatim module syntax enabled (`verbatimModuleSyntax: true`)
 
 ### Imports
-- Use `.tsx` or `.ts` extensions in imports (verbatimModuleSyntax)
-- Import OpenTUI components from `@opentui/core` and `@opentui/react`
-- Example:
-  ```tsx
-  import { createCliRenderer, TextAttributes } from "@opentui/core";
-  import { createRoot } from "@opentui/react";
-  ```
+- Prefer extensionless relative imports (current codebase convention, works with Bun + TS bundler resolution)
+- Import from workspace packages: `import { Type } from "@mr-rocket/shared"`
+- CLI uses OpenTUI: `import { createCliRenderer } from "@opentui/core"`
+- Extension uses React: `import { useState } from "react"`
 
 ### Component Structure
 - Functional components only
-- Lowercase tag names for OpenTUI primitives (e.g., `<box>`, `<text>`, `<ascii-font>`)
-- Components are rendered using `createRoot(renderer).render(<Component />)`
-- Use async/await for `createCliRenderer()` initialization
-
-### Formatting & Types
-- No linting/formatting tools configured - follow existing patterns
-- Use explicit TypeScript types
-- Leverage strict type checking (no `any`, implicit `any` prohibited)
-- Use ESNext features
-
-### Error Handling
-- Follow strict TypeScript practices
-- Handle async operations with proper error handling
-- Use runtime checks for external data
+- CLI: Lowercase tag names for OpenTUI primitives (`<box>`, `<text>`)
+- Extension: Standard React components with JSX
 
 ### Naming Conventions
 - Component names: PascalCase
@@ -88,38 +91,18 @@ Mr-Rocket is an extensible CLI/TUI tool for daily workflow automation. It suppor
 - Constants: UPPER_SNAKE_CASE for exported constants
 
 ### File Organization
-- Source files in `src/` directory
-- Entry point: `src/index.tsx`
-- Use logical grouping by feature or component type
-
-### React/OpenTUI Specifics
-- JSX with `react-jsx` transformation
-- Import source for JSX: `@opentui/react`
-- Use OpenTUI layout primitives: `<box>`, `<text>`, `<ascii-font>`
-- Attributes like `alignItems`, `justifyContent` use React-like naming (camelCase)
-- Use `TextAttributes` enum for text styling
-
-### Performance Considerations
-- Bun provides fast execution - no build optimization needed
-- Use `--watch` flag for development hot reload
-- Avoid unnecessary re-renders in TUI context
-
-## Development Notes
-
-- No separate build/dist process - Bun executes TSX directly
-- Watch mode available via `--watch` flag
-- No ESLint/Prettier configured - maintain consistent style manually
-- Code coverage not implemented
+- CLI source: `src/`
+- Extension source: `packages/extension/src/`
+- Shared types: `packages/shared/src/types/`
 
 ## Architecture Patterns
 
-### Command System
+### Command System (CLI)
 All commands extend `BaseCommand` and implement:
 - `name`: Command identifier (e.g., "mr create")
 - `description`: Human-readable description
 - `category`: Command category (e.g., "GitLab")
 - `executeInternal(args)`: Main execution logic
-- `printHelp()`: Command-specific help text
 
 Example:
 ```typescript
@@ -138,24 +121,20 @@ class MyCommand extends BaseCommand {
 ```
 
 ### Adding New Commands
-1. Create command file in appropriate directory (e.g., `src/commands/gitlab/mr/my-command.ts`)
+1. Create command file in `src/commands/<category>/`
 2. Extend `BaseCommand` and implement required methods
-3. Register command in `src/cli.ts`:
-   ```typescript
-   commandRegistry.register(new MyCommand());
-   ```
+3. Register command in `src/cli.ts`
 
 ### Service Layer
 Services wrap external APIs and provide type-safe interfaces:
-- Initialize API clients with config
-- Transform API responses to internal types
-- Handle errors uniformly
+- `src/services/gitlab.service.ts` - GitLab API
+- `src/services/confluence.service.ts` - Confluence API
+- Future: `cdp.service.ts` - CDP integration using extension auth
 
-Example (GitLab):
-```typescript
-const gitlab = new GitLabService(host, token, config.gitlab.tls);
-const mrs = await gitlab.listMergeRequests(projectId, { state: "opened" });
-```
+### Extension Architecture (WXT)
+- Background script: `packages/extension/src/entrypoints/background.ts` - Cookie monitoring, native messaging
+- Popup: `packages/extension/src/entrypoints/popup/` - React UI for configuration
+- Config: `packages/extension/wxt.config.ts` - Manifest and build configuration
 
 ### Config Management
 Config stored at `~/.mr-rocket/config.json`:
@@ -166,11 +145,7 @@ Config stored at `~/.mr-rocket/config.json`:
     "host": "https://gitlab.com",
     "token": "YOUR_TOKEN",
     "defaultProjectId": "",
-    "defaultBranch": "main",
-    "tls": {
-      "rejectUnauthorized": true,
-      "caFile": ""
-    }
+    "defaultBranch": "main"
   },
   "ui": {
     "refreshInterval": 10000,
@@ -179,23 +154,15 @@ Config stored at `~/.mr-rocket/config.json`:
 }
 ```
 
-### History Management
-History stored at `~/.mr-rocket/history.json`:
-- Each command execution is logged automatically
-- Includes timestamp, args, output, duration, status
-- Query by command, status, date range
-- Rotates after maxHistoryItems (default: 1000)
-
-### Output Format
-Commands support dual output:
-- Default: Human-readable with colored text (green=success, red=error, etc.)
-- `--json` flag: Structured JSON for scripting
+### CDP Auth Flow
+1. Extension monitors cookies for configured CDP domain
+2. On cookie change, syncs to native messaging host
+3. Native host writes encrypted cookies to `~/.mr-rocket/cdp-auth.json`
+4. CLI CDPService reads auth file for authenticated requests
 
 ### CLI Syntax
-Flat subcommand structure (Option A):
 ```bash
 mr-rocket mr create --source feature --target main --title "Fix"
 mr-rocket mr list --state opened --author @me
 mr-rocket issue create --title "New feature"
-mr-rocket ui  # Launch TUI (coming in Phase 3)
 ```

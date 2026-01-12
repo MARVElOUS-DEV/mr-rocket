@@ -63,22 +63,43 @@ export class OutputFormatter {
   private formatTable(items: Array<Record<string, unknown>>): string {
     if (items.length === 0) return "";
 
-    const headers = Object.keys(items[0]);
+    const firstItem = items[0];
+    if (!firstItem) {
+      return "";
+    }
+
+    const headers = Object.keys(firstItem);
     const rows = items.map((item) => headers.map((h) => String(item[h] ?? "")));
 
     const colWidths = headers.map((h, i) =>
-      Math.max(h.length, ...rows.map((r) => r[i].length))
+      Math.max(h.length, ...rows.map((r) => r[i]?.length ?? 0))
     );
 
     const separator = "+" + colWidths.map((w) => "-".repeat(w + 2)).join("+") + "+";
-    const headerRow = "|" + headers.map((h, i) => ` ${h.padEnd(colWidths[i])} `).join("|") + "|";
+    const headerRow =
+      "|" +
+      headers
+        .map((h, i) => {
+          const width = colWidths[i] ?? h.length;
+          return ` ${h.padEnd(width)} `;
+        })
+        .join("|") +
+      "|";
 
     let result = separator + "\n";
     result += headerRow + "\n";
     result += separator + "\n";
 
     for (const row of rows) {
-      result += "|" + row.map((cell, i) => ` ${cell.padEnd(colWidths[i])} `).join("|") + "|\n";
+      result +=
+        "|" +
+        row
+          .map((cell, i) => {
+            const width = colWidths[i] ?? cell.length;
+            return ` ${cell.padEnd(width)} `;
+          })
+          .join("|") +
+        "|\n";
       result += separator + "\n";
     }
 
@@ -93,18 +114,34 @@ export class OutputFormatter {
     }
 
     const colWidths = headers.map((h, i) =>
-      Math.max(h.length, ...rows.map((r) => r[i].length))
+      Math.max(h.length, ...rows.map((r) => r[i]?.length ?? 0))
     );
 
     const separator = "+" + colWidths.map((w) => "-".repeat(w + 2)).join("+") + "+";
-    const headerRow = "|" + headers.map((h, i) => ` ${h.padEnd(colWidths[i])} `).join("|") + "|";
+    const headerRow =
+      "|" +
+      headers
+        .map((h, i) => {
+          const width = colWidths[i] ?? h.length;
+          return ` ${h.padEnd(width)} `;
+        })
+        .join("|") +
+      "|";
 
     let result = separator + "\n";
     result += headerRow + "\n";
     result += separator + "\n";
 
     for (const row of rows) {
-      result += "|" + row.map((cell, i) => ` ${cell.padEnd(colWidths[i])} `).join("|") + "|\n";
+      result +=
+        "|" +
+        row
+          .map((cell, i) => {
+            const width = colWidths[i] ?? cell.length;
+            return ` ${cell.padEnd(width)} `;
+          })
+          .join("|") +
+        "|\n";
       result += separator + "\n";
     }
 

@@ -1,7 +1,7 @@
-import { createCliRenderer, TextAttributes } from "@opentui/core";
+import { TextAttributes } from "@opentui/core";
 import { createRoot, useKeyboard } from "@opentui/react";
 import { useEffect, useState } from "react";
-import { initializeTUI, createTUIRoot, cleanupTUI } from "./tui/client.js";
+import { initializeTUI, createTUIRoot, cleanupTUI, getRenderer } from "./tui/client.js";
 import { getStore } from "./tui/store.js";
 import { Dashboard } from "./tui/components/dashboard.js";
 import { MRList } from "./tui/components/mr-list.js";

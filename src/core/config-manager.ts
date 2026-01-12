@@ -2,7 +2,7 @@ import { writeFile, readFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { existsSync } from "node:fs";
-import type { AppConfig } from "../models/config.js";
+import type { AppConfig } from "../models/config";
 import { error, success } from "./colors";
 
 const CONFIG_DIR = join(homedir(), ".mr-rocket");

@@ -28,6 +28,10 @@ export class CLIParser {
     let i = 0;
     while (i < args.length) {
       const arg = args[i];
+      if (arg === undefined) {
+        i++;
+        continue;
+      }
 
       if (arg === "--json") {
         result.json = true;
@@ -71,6 +75,9 @@ export class CLIParser {
     }
 
     const name = args[0];
+    if (!name) {
+      return { name: "help", args: [] };
+    }
     const commandArgs = args.slice(1);
 
     return { name, args: commandArgs };

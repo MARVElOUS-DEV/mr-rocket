@@ -3,8 +3,9 @@
   "module": "src/index.tsx",
   "type": "module",
   "private": true,
+  "workspaces": ["packages/*"],
   "scripts": {
-    "dev": "bun run --watch src/index.tsx",
+    "dev": "bun run --watch --inspect-wait=ws://localhost:6499 src/index.tsx",
     "cli": "bun run src/cli.ts",
     "tui": "bun run src/index.tsx",
     "build:cli": "bun build --compile src/cli.ts --outfile mr-rocket",

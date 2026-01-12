@@ -81,6 +81,7 @@ export class ConfluenceService {
         limit: options.limit,
         start: options.offset,
       })) as SearchContentResult;
+      logger.debug("Confluence search raw response", response);
     } catch (err) {
       logger.error("Confluence search request failed", {
         ...requestMeta,
@@ -153,7 +154,7 @@ export class ConfluenceService {
     try {
       content = (await this.client.content.getContentById(match.id, {
         expand: ["body.view", "version", "space"],
-      })) as ContentResult;
+      })) as unknown as ContentResult;
     } catch (err) {
       logger.error("Confluence read page failed", {
         host: this.host,

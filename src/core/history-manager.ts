@@ -2,8 +2,9 @@ import { writeFile, readFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { existsSync } from "node:fs";
-import type { HistoryEntry, HistoryFilter, CommandOutput } from "../models/history.js";
-import { error } from "./colors";
+import type { HistoryEntry, HistoryFilter } from "../models/history.js";
+import type { CommandOutput } from "../models/command-output.js";
+import { error } from "./colors.js";
 import { randomUUID } from "node:crypto";
 import { DEFAULT_CONFIG } from "../models/config.js";
 
