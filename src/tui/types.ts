@@ -1,12 +1,21 @@
-import type { MergeRequest, Issue } from "../models/gitlab.js";
+import type { MergeRequest } from "../models/gitlab.js";
+import type { BugMetadata } from "../services/cdp.service.js";
+
+export type ToastType = "info" | "success" | "warning" | "error";
+
+export interface ToastState {
+  message: string;
+  type: ToastType;
+  duration?: number;
+}
 
 export type Screen =
   | "dashboard"
   | "mr-list"
   | "mr-create"
   | "mr-detail"
-  | "issue-list"
-  | "issue-detail"
+  | "bugs-list"
+  | "bug-comment"
   | "wiki-search"
   | "history";
 
@@ -14,21 +23,21 @@ export interface AppState {
   currentScreen: Screen;
   selectedMr?: MergeRequest;
   selectedMrIid?: number;
-  selectedIssue?: Issue;
-  selectedIssueIid?: number;
   error?: string;
   loadedM?: MergeRequest[];
-  loadedI?: Issue[];
+  loadedBugs?: BugMetadata[];
+  toast?: ToastState;
 }
 
 export type AppAction =
   | { type: "NAVIGATE"; screen: Screen }
   | { type: "SELECT_MR"; mr: MergeRequest; iid: number }
-  | { type: "SELECT_ISSUE"; issue: Issue; iid: number }
   | { type: "SET_ERROR"; error: string }
   | { type: "CLEAR_ERROR" }
   | { type: "SET_MR"; mrs: MergeRequest[] }
-  | { type: "SET_ISSUES"; issues: Issue[] };
+  | { type: "SET_BUGS"; bugs: BugMetadata[] }
+  | { type: "SHOW_TOAST"; toast: ToastState }
+  | { type: "HIDE_TOAST" };
 
 export function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -38,20 +47,12 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         currentScreen: action.screen,
         selectedMr: undefined,
         selectedMrIid: undefined,
-        selectedIssue: undefined,
-        selectedIssueIid: undefined,
       };
     case "SELECT_MR":
       return {
         ...state,
         selectedMr: action.mr,
         selectedMrIid: action.iid,
-      };
-    case "SELECT_ISSUE":
-      return {
-        ...state,
-        selectedIssue: action.issue,
-        selectedIssueIid: action.iid,
       };
     case "SET_ERROR":
       return {
@@ -68,10 +69,20 @@ export function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         loadedM: action.mrs,
       };
-    case "SET_ISSUES":
+    case "SET_BUGS":
       return {
         ...state,
-        loadedI: action.issues,
+        loadedBugs: action.bugs,
+      };
+    case "SHOW_TOAST":
+      return {
+        ...state,
+        toast: action.toast,
+      };
+    case "HIDE_TOAST":
+      return {
+        ...state,
+        toast: undefined,
       };
     default:
       return state;

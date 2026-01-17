@@ -6,10 +6,12 @@
   "workspaces": ["packages/*"],
   "scripts": {
     "dev": "bun run --watch --inspect-wait=ws://localhost:6499 src/index.tsx",
+    "ext": "bun run --filter @mr-rocket/extension dev",
     "cli": "bun run src/cli.ts",
     "tui": "bun run src/index.tsx",
     "build:cli": "bun build --compile src/cli.ts --outfile mr-rocket",
-    "build:tui": "bun build --compile src/index.tsx --outfile mr-rocket-tui"
+    "build:tui": "bun build --compile src/index.tsx --outfile mr-rocket-tui",
+    "build:ext": "bun run --filter @mr-rocket/extension build"
   },
   "devDependencies": {
     "@types/bun": "latest"
@@ -18,6 +20,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@mr-rocket/shared": "workspace:*",
     "confluence.js": "^1.7.1",
     "@gitbeaker/rest": "^40.0.3",
     "@opentui/core": "^0.1.69",

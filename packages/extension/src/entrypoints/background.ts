@@ -11,7 +11,7 @@ interface Config {
 
 const DEFAULT_CONFIG: Config = {
   cdpDomain: "your-cdp-domain.com",
-  syncInterval: 60000,
+  syncInterval: 60 * 60 * 1000, // 1 hour
   enabled: true,
 };
 
@@ -28,6 +28,7 @@ export default defineBackground(() => {
       if (stored[CONFIG_KEY]) {
         config = { ...DEFAULT_CONFIG, ...stored[CONFIG_KEY] };
       }
+      console.log("🚀 ~ read config:", config)
       startCookieMonitor();
     })
     .catch((error) => {
@@ -71,7 +72,7 @@ async function syncCookies() {
   if (!config.enabled) return;
 
   try {
-    const cookies = await chrome.cookies.getAll({ domain: config.cdpDomain });
+    const cookies = await chrome.cookies.getAll({ url: `https://${config.cdpDomain}` });
 
     if (cookies.length === 0) {
       updateBadge("!", "#FFA500");

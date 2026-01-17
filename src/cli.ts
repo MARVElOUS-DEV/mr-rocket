@@ -14,6 +14,9 @@ import { IssueListCommand } from "./commands/gitlab/issue/list";
 import { LogsCommand } from "./commands/system/logs";
 import { WikiSearchCommand } from "./commands/wiki/search";
 import { WikiReadCommand } from "./commands/wiki/read";
+import { CDPStatusCommand } from "./commands/cdp/status";
+import { CDPBugsListCommand } from "./commands/cdp/bugs-list";
+import { CDPBugsShowCommand } from "./commands/cdp/bugs-show";
 
 async function main() {
   const parsed = cliParser.parse(process.argv);
@@ -86,5 +89,8 @@ commandRegistry.register(new IssueListCommand());
 commandRegistry.register(new LogsCommand());
 commandRegistry.register(new WikiSearchCommand());
 commandRegistry.register(new WikiReadCommand());
+commandRegistry.register(new CDPStatusCommand());
+commandRegistry.register(new CDPBugsListCommand());
+commandRegistry.register(new CDPBugsShowCommand());
 
 main();

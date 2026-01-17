@@ -1,5 +1,6 @@
-import type { MergeRequest, Issue } from "../models/gitlab.js";
+import type { MergeRequest } from "../models/gitlab.js";
 import type { AppAction, AppState } from "./types.js";
+import type { BugMetadata } from "../services/cdp.service.js";
 
 export interface TUIStore {
   getState(): AppState;
@@ -11,7 +12,7 @@ export function createStore(): TUIStore {
   let state: AppState = {
     currentScreen: "dashboard",
     loadedM: [],
-    loadedI: [],
+    loadedBugs: [],
   };
 
   const listeners: Set<(state: AppState) => void> = new Set();
@@ -44,13 +45,6 @@ export function createStore(): TUIStore {
           selectedMrIid: action.iid,
           currentScreen: "mr-detail",
         };
-      case "SELECT_ISSUE":
-        return {
-          ...state,
-          selectedIssue: action.issue,
-          selectedIssueIid: action.iid,
-          currentScreen: "issue-detail",
-        };
       case "SET_ERROR":
         return {
           ...state,
@@ -66,10 +60,20 @@ export function createStore(): TUIStore {
           ...state,
           loadedM: action.mrs,
         };
-      case "SET_ISSUES":
+      case "SET_BUGS":
         return {
           ...state,
-          loadedI: action.issues,
+          loadedBugs: action.bugs,
+        };
+      case "SHOW_TOAST":
+        return {
+          ...state,
+          toast: action.toast,
+        };
+      case "HIDE_TOAST":
+        return {
+          ...state,
+          toast: undefined,
         };
       default:
         return state;

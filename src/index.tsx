@@ -6,9 +6,11 @@ import { getStore } from "./tui/store.js";
 import { Dashboard } from "./tui/components/dashboard.js";
 import { MRList } from "./tui/components/mr-list.js";
 import { MRCreate } from "./tui/components/mr-create.js";
-import { IssueList } from "./tui/components/issue-list.js";
+import { BugsList } from "./tui/components/bugs-list.js";
+import { BugComment } from "./tui/components/bug-comment.js";
 import { HistoryList } from "./tui/components/history-list.js";
 import { WikiSearch } from "./tui/components/wiki-search.js";
+import { Toast } from "./tui/components/toast.js";
 import { type AppState } from "./tui/types.js";
 
 function App() {
@@ -23,7 +25,7 @@ function App() {
 
   useKeyboard((key) => {
     const input = key.name;
-    if (state.currentScreen === "mr-create") {
+    if (state.currentScreen === "mr-create" || state.currentScreen === "bug-comment") {
       return;
     }
     if (input === "q") {
@@ -38,7 +40,9 @@ function App() {
     } else if (input === "c") {
       store.dispatch({ type: "NAVIGATE", screen: "mr-create" });
     } else if (input === "i") {
-      store.dispatch({ type: "NAVIGATE", screen: "issue-list" });
+      store.dispatch({ type: "NAVIGATE", screen: "bugs-list" });
+    } else if (input === "n") {
+      store.dispatch({ type: "NAVIGATE", screen: "bug-comment" });
     } else if (input === "h") {
       store.dispatch({ type: "NAVIGATE", screen: "history" });
     } else if (input === "w") {
@@ -54,8 +58,10 @@ function App() {
         return <MRList />;
       case "mr-create":
         return <MRCreate />;
-      case "issue-list":
-        return <IssueList />;
+      case "bugs-list":
+        return <BugsList />;
+      case "bug-comment":
+        return <BugComment />;
       case "history":
         return <HistoryList />;
       case "wiki-search":
@@ -74,6 +80,7 @@ function App() {
   return (
     <box flexDirection="column" flexGrow={1} padding={1}>
       {renderScreen()}
+      <Toast />
     </box>
   );
 }

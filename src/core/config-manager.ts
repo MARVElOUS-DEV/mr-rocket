@@ -57,6 +57,14 @@ export class ConfigManager {
           ...config.confluence?.tls,
         },
       },
+      cdp: config.cdp
+        ? {
+            ...config.cdp,
+            tls: {
+              ...config.cdp.tls,
+            },
+          }
+        : undefined,
       ui: {
         ...defaults.ui,
         ...config.ui,
@@ -76,6 +84,15 @@ export class ConfigManager {
     }
     if (!config.gitlab.token || config.gitlab.token === "YOUR_PERSONAL_ACCESS_TOKEN_HERE") {
       throw new Error("GitLab token is not configured. Please edit ~/.mr-rocket/config.json");
+    }
+
+    if (config.cdp) {
+      if (!config.cdp.host) {
+        throw new Error("CDP host is required if CDP section is present");
+      }
+      if (config.cdp.host === "https://your-cdp-domain.com") {
+        throw new Error("CDP host is not configured. Please edit ~/.mr-rocket/config.json");
+      }
     }
   }
 

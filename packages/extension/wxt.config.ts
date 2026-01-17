@@ -8,7 +8,7 @@ export default defineConfig({
     description: "Syncs CDP authentication for MR-Rocket CLI",
     version: "1.0.0",
     permissions: ["cookies", "nativeMessaging", "storage"],
-    host_permissions: ["https://*/*"],
+    host_permissions: ["<all_urls>"],
   },
   runner: {
     startUrls: ["https://example.com"],

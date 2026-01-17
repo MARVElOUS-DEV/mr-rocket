@@ -13,6 +13,11 @@ export function App() {
 
   useEffect(() => {
     chrome.runtime.sendMessage({ type: "GET_STATUS" }, (response: Status) => {
+      console.log("[popup/App] GET_STATUS response:", response, "lastError:", chrome.runtime.lastError);
+      if (chrome.runtime.lastError) {
+        console.error("[popup/App] Error:", chrome.runtime.lastError.message);
+        return;
+      }
       setStatus(response);
       setDomain(response.domain);
     });

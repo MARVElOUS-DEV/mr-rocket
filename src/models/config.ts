@@ -2,6 +2,7 @@ export interface AppConfig {
   version: string;
   gitlab: GitLabConfig;
   confluence: ConfluenceConfig;
+  cdp?: CDPConfig;
   ui: UIConfig;
 }
 
@@ -30,6 +31,17 @@ export interface ConfluenceTLSConfig {
   caFile?: string;
 }
 
+export interface CDPConfig {
+  host: string;
+  authFile?: string;
+  tls?: CDPTLSConfig;
+}
+
+export interface CDPTLSConfig {
+  rejectUnauthorized?: boolean;
+  caFile?: string;
+}
+
 export interface UIConfig {
   refreshInterval: number;
   maxHistoryItems: number;
@@ -51,6 +63,13 @@ export const DEFAULT_CONFIG: AppConfig = {
     host: "https://your-domain.atlassian.net/wiki",
     token: "YOUR_CONFLUENCE_PAT_HERE",
     defaultSpaceKey: "",
+    tls: {
+      rejectUnauthorized: true,
+      caFile: "",
+    },
+  },
+  cdp: {
+    host: "https://your-cdp-domain.com",
     tls: {
       rejectUnauthorized: true,
       caFile: "",
