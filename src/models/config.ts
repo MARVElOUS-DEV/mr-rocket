@@ -6,11 +6,17 @@ export interface AppConfig {
   ui: UIConfig;
 }
 
+export interface GitLabProject {
+  name: string;
+  id: string;
+}
+
 export interface GitLabConfig {
   host: string;
   token: string;
   defaultProjectId?: string;
   defaultBranch?: string;
+  projects?: GitLabProject[];
   tls?: GitLabTLSConfig;
 }
 
@@ -54,6 +60,7 @@ export const DEFAULT_CONFIG: AppConfig = {
     token: "YOUR_PERSONAL_ACCESS_TOKEN_HERE",
     defaultProjectId: "",
     defaultBranch: "main",
+    projects: [],
     tls: {
       rejectUnauthorized: true,
       caFile: "",

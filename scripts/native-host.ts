@@ -75,22 +75,28 @@ async function readMessage(): Promise<SyncMessage | null> {
   try {
     // Chrome sends: 4-byte length (little-endian) + JSON message in one or more chunks
     const firstRead = await reader.read();
-    
+
     if (!firstRead.value || firstRead.value.length < 4) {
       await log("Failed to read length header");
       return null;
     }
-    
+
     const fullData = firstRead.value;
-    const messageLength = new DataView(fullData.buffer, fullData.byteOffset, 4).getUint32(0, true);
-    
-    await log(`Message length: ${messageLength}, received bytes: ${fullData.length}`);
-    
+    const messageLength = new DataView(
+      fullData.buffer,
+      fullData.byteOffset,
+      4,
+    ).getUint32(0, true);
+
+    await log(
+      `Message length: ${messageLength}, received bytes: ${fullData.length}`,
+    );
+
     if (messageLength === 0 || messageLength > 1024 * 1024) {
       await log(`Invalid message length: ${messageLength}`);
       return null;
     }
-    
+
     let messageData: Uint8Array;
     if (fullData.length >= 4 + messageLength) {
       // All data in first chunk
@@ -99,14 +105,14 @@ async function readMessage(): Promise<SyncMessage | null> {
       // Need to read more chunks
       const chunks = [fullData.subarray(4)];
       let totalRead = fullData.length - 4;
-      
+
       while (totalRead < messageLength) {
         const { value, done } = await reader.read();
         if (done || !value) break;
         chunks.push(value);
         totalRead += value.length;
       }
-      
+
       messageData = new Uint8Array(messageLength);
       let offset = 0;
       for (const chunk of chunks) {
@@ -115,7 +121,7 @@ async function readMessage(): Promise<SyncMessage | null> {
         offset += toCopy;
       }
     }
-    
+
     const messageText = new TextDecoder().decode(messageData);
     await log(`Received: ${messageText.substring(0, 200)}...`);
     return JSON.parse(messageText) as SyncMessage;
@@ -138,7 +144,9 @@ function writeMessage(message: AckMessage | ErrorMessage): void {
 }
 
 async function handleSyncCookies(message: SyncMessage): Promise<void> {
-  await log(`Received ${message.cookies.length} cookies for domain: ${message.domain}`);
+  await log(
+    `Received ${message.cookies.length} cookies for domain: ${message.domain}`,
+  );
 
   if (!existsSync(MR_ROCKET_DIR)) {
     await mkdir(MR_ROCKET_DIR, { recursive: true });
@@ -190,7 +198,7 @@ async function main(): Promise<void> {
     if (message.type === "SYNC_COOKIES") {
       await handleSyncCookies(message);
     } else {
-      await log(`Unknown message type: ${(message as Record<string, unknown>).type}`);
+      await log(`Unknown message type: ${message.type}`);
       writeMessage({ type: "ERROR", error: "Unknown message type" });
     }
   } catch (error) {

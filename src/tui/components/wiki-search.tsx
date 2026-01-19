@@ -1,11 +1,13 @@
+import type { TextareaRenderable } from "@opentui/core";
 import { TextAttributes } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { ConfluenceSearchResult } from "../../models/confluence.js";
 import { configManager } from "../../core/config-manager.js";
 import { ValidationError, ValidationHelper } from "../../utils/validation.js";
 import { getConfluenceService } from "../client.js";
 import { getStore } from "../store.js";
+import { singleLineKeyBindings } from "../../utils/textarea-helper";
 
 type SearchState = "idle" | "loading" | "success" | "error";
 
@@ -13,9 +15,10 @@ export function WikiSearch() {
   const store = getStore();
   const config = useMemo(() => configManager.getConfig(), []);
 
-  const [query, setQuery] = useState("");
-  const [spaceKey, setSpaceKey] = useState(config.confluence.defaultSpaceKey || "");
-  const [limit, setLimit] = useState("10");
+  const queryRef = useRef<TextareaRenderable>(null);
+  const spaceKeyRef = useRef<TextareaRenderable>(null);
+  const limitRef = useRef<TextareaRenderable>(null);
+
   const [status, setStatus] = useState<SearchState>("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [results, setResults] = useState<ConfluenceSearchResult[]>([]);
@@ -32,8 +35,14 @@ export function WikiSearch() {
     setMessage(null);
 
     try {
-      const trimmedQuery = query.trim();
-      if (!trimmedQuery) {
+      const query = queryRef.current?.plainText?.trim() || "";
+      const spaceKey =
+        spaceKeyRef.current?.plainText?.trim() ||
+        config.confluence.defaultSpaceKey ||
+        "";
+      const limit = limitRef.current?.plainText?.trim() || "10";
+
+      if (!query) {
         throw new ValidationError("Search query required");
       }
 
@@ -47,11 +56,13 @@ export function WikiSearch() {
       ValidationHelper.validUrl(config.confluence.host);
       ValidationHelper.nonEmpty(config.confluence.token, "confluence token");
       if (config.confluence.token === "YOUR_CONFLUENCE_PAT_HERE") {
-        throw new ValidationError("Confluence token is not configured. Please edit ~/.mr-rocket/config.json");
+        throw new ValidationError(
+          "Confluence token is not configured. Please edit ~/.mr-rocket/config.json",
+        );
       }
 
       const confluence = getConfluenceService();
-      const data = await confluence.searchPages(trimmedQuery, {
+      const data = await confluence.searchPages(query, {
         limit: parsedLimit,
         spaceKey: spaceKey || undefined,
       });
@@ -74,7 +85,9 @@ export function WikiSearch() {
       store.dispatch({ type: "NAVIGATE", screen: "dashboard" });
     } else if (key.name === "tab") {
       const direction = key.shift ? -1 : 1;
-      setFocusIndex((current) => (current + direction + focusCount) % focusCount);
+      setFocusIndex(
+        (current) => (current + direction + focusCount) % focusCount,
+      );
     } else if (key.name === "return") {
       void runSearch();
     }
@@ -83,21 +96,25 @@ export function WikiSearch() {
   return (
     <box flexDirection="column" flexGrow={1} gap={1}>
       <text attributes={TextAttributes.BOLD}>Wiki Search</text>
-      <text attributes={TextAttributes.DIM}>Enter search · Tab move · Esc back</text>
+      <text attributes={TextAttributes.DIM}>
+        Enter search · Tab move · Esc back
+      </text>
 
       {message ? (
-        <text style={{ fg: status === "error" ? "red" : "green" }}>{message}</text>
+        <text style={{ fg: status === "error" ? "red" : "green" }}>
+          {message}
+        </text>
       ) : null}
 
       <box flexDirection="column" gap={1}>
         <box flexDirection="column">
           <text attributes={TextAttributes.DIM}>Query</text>
           <box style={{ border: true, height: 3 }}>
-            <input
-              value={query}
-              onInput={setQuery}
+            <textarea
+              ref={queryRef}
               placeholder="Search Confluence"
               focused={focusIndex === 0}
+              keyBindings={singleLineKeyBindings}
             />
           </box>
         </box>
@@ -105,11 +122,11 @@ export function WikiSearch() {
         <box flexDirection="column">
           <text attributes={TextAttributes.DIM}>Space Key</text>
           <box style={{ border: true, height: 3 }}>
-            <input
-              value={spaceKey}
-              onInput={setSpaceKey}
+            <textarea
+              ref={spaceKeyRef}
               placeholder="Optional"
               focused={focusIndex === 1}
+              keyBindings={singleLineKeyBindings}
             />
           </box>
         </box>
@@ -117,11 +134,11 @@ export function WikiSearch() {
         <box flexDirection="column">
           <text attributes={TextAttributes.DIM}>Limit</text>
           <box style={{ border: true, height: 3 }}>
-            <input
-              value={limit}
-              onInput={setLimit}
+            <textarea
+              ref={limitRef}
               placeholder="10"
               focused={focusIndex === 2}
+              keyBindings={singleLineKeyBindings}
             />
           </box>
         </box>
@@ -132,7 +149,9 @@ export function WikiSearch() {
           <text attributes={TextAttributes.DIM}>Searching...</text>
         ) : results.length === 0 ? (
           <text attributes={TextAttributes.DIM}>
-            {status === "success" ? "No results found." : "Enter a query to search."}
+            {status === "success"
+              ? "No results found."
+              : "Enter a query to search."}
           </text>
         ) : (
           results.map((result) => (

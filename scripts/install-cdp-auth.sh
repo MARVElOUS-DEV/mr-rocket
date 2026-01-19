@@ -35,15 +35,16 @@ else
     exit 1
 fi
 
-# Check for bun
-if ! command -v bun &> /dev/null; then
-    echo "❌ Bun is required but not installed."
-    echo "   Install it from: https://bun.sh"
+# Check for pre-compiled native host binary
+NATIVE_HOST_BINARY="$PROJECT_ROOT/dist/native-host"
+
+if [[ ! -f "$NATIVE_HOST_BINARY" ]]; then
+    echo "❌ Native host binary not found at: $NATIVE_HOST_BINARY"
+    echo "   Please build it first with: bun run build:native-host"
     exit 1
 fi
 
-BUN_PATH=$(which bun)
-echo "📍 Found bun at: $BUN_PATH"
+echo "📍 Found native host binary at: $NATIVE_HOST_BINARY"
 
 # Create directories
 echo ""
@@ -51,17 +52,10 @@ echo "📁 Creating directories..."
 mkdir -p "$NATIVE_HOST_DIR"
 mkdir -p "$CHROME_NATIVE_HOST_DIR"
 
-# Copy native host script
-echo "📋 Installing native messaging host..."
-cp "$SCRIPT_DIR/native-host.ts" "$NATIVE_HOST_DIR/host.ts"
-
-# Create wrapper script
-cat > "$NATIVE_HOST_DIR/host.sh" << EOF
-#!/bin/bash
-exec "$BUN_PATH" run "$NATIVE_HOST_DIR/host.ts" "\$@"
-EOF
-
-chmod +x "$NATIVE_HOST_DIR/host.sh"
+# Copy native host binary
+echo "📋 Installing native messaging host binary..."
+cp "$NATIVE_HOST_BINARY" "$NATIVE_HOST_DIR/native-host"
+chmod +x "$NATIVE_HOST_DIR/native-host"
 
 # Create native host manifest (placeholder for extension ID)
 EXTENSION_ID="${1:-EXTENSION_ID_PLACEHOLDER}"
@@ -71,7 +65,7 @@ cat > "$CHROME_NATIVE_HOST_DIR/com.mrrocket.auth.json" << EOF
 {
   "name": "com.mrrocket.auth",
   "description": "MR-Rocket Auth Native Messaging Host",
-  "path": "$NATIVE_HOST_DIR/host.sh",
+  "path": "$NATIVE_HOST_DIR/native-host",
   "type": "stdio",
   "allowed_origins": [
     "chrome-extension://$EXTENSION_ID/"
@@ -84,8 +78,7 @@ echo "✅ Native messaging host installed!"
 echo ""
 echo "📌 Next Steps:"
 echo ""
-echo "1. Build the Chrome extension:"
-echo "   cd $PROJECT_ROOT"
+echo "1. Build the Chrome extension (if not already built):"
 echo "   bun run build:ext"
 echo ""
 echo "2. Load the extension in Chrome:"

@@ -1,16 +1,34 @@
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { existsSync } from "node:fs";
+import { existsSync, copyFileSync } from "node:fs";
 import { $ } from "bun";
 
 /**
  * Saves clipboard image to a temp file and returns the path.
+ * Handles both raw image data and file references from clipboard.
  * Returns null if no image in clipboard.
  */
 export async function saveClipboardImage(): Promise<string | null> {
   const tempPath = join(tmpdir(), `mr-rocket-clipboard-${Date.now()}.png`);
 
-  const script = `
+  // First try to get file path from clipboard (when file is copied in Finder)
+  const fileScript = `
+    try
+      set theFiles to the clipboard as «class furl»
+      return POSIX path of theFiles
+    on error
+      return ""
+    end try
+  `;
+  
+  const filePath = (await $`osascript -e ${fileScript}`.text()).trim();
+  if (filePath && existsSync(filePath) && /\.(png|jpg|jpeg|gif|webp|bmp)$/i.test(filePath)) {
+    copyFileSync(filePath, tempPath);
+    return tempPath;
+  }
+
+  // Fall back to raw PNG data from clipboard
+  const pngScript = `
     set theFile to POSIX file "${tempPath}"
     try
       set pngData to the clipboard as «class PNGf»
@@ -23,7 +41,7 @@ export async function saveClipboardImage(): Promise<string | null> {
     end try
   `;
 
-  const result = await $`osascript -e ${script}`.text();
+  const result = await $`osascript -e ${pngScript}`.text();
 
   if (result.trim() === "ok" && existsSync(tempPath)) {
     return tempPath;

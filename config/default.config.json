@@ -3,8 +3,12 @@
   "gitlab": {
     "host": "https://gitlab.com",
     "token": "YOUR_PERSONAL_ACCESS_TOKEN_HERE",
-    "defaultProjectId": "",
-    "defaultBranch": "master"
+    "defaultProjectId": "15212",
+    "defaultBranch": "master",
+    "projects": [
+      { "name": "My Project", "id": "15212" },
+      { "name": "Another Project", "id": "15213" }
+    ]
   },
   "confluence": {
     "host": "https://your-domain.atlassian.net/wiki",

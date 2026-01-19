@@ -21,7 +21,7 @@ export interface BugMetadata {
   createdAt: string;
   updatedAt: string;
   description?: string;
-  showModule?: string
+  showModule?: string;
 }
 
 export interface CDPAuthStatus {
@@ -72,7 +72,7 @@ export class CDPService {
     if (!existsSync(authFile)) {
       throw new Error(
         `CDP auth file not found at ${authFile}. ` +
-          "Please install the Chrome extension and log into CDP."
+          "Please install the Chrome extension and log into CDP.",
       );
     }
 
@@ -80,7 +80,11 @@ export class CDPService {
       const content = await readFile(authFile, "utf-8");
       const wrapper = JSON.parse(content);
 
-      if (!wrapper || typeof wrapper !== "object" || typeof wrapper.data !== "string") {
+      if (
+        !wrapper ||
+        typeof wrapper !== "object" ||
+        typeof wrapper.data !== "string"
+      ) {
         throw new Error("Invalid cdp-auth.json format");
       }
 
@@ -99,16 +103,18 @@ export class CDPService {
       const authAge = Date.now() - authData.timestamp;
       if (authAge > MAX_AUTH_AGE_MS) {
         logger.warn(
-          "CDP auth is stale (older than 24 hours). Please refresh by visiting CDP in Chrome."
+          "CDP auth is stale (older than 24 hours). Please refresh by visiting CDP in Chrome.",
         );
       }
 
       this.authData = authData;
       this.cookies = authData.cookies;
-      logger.debug(`Loaded ${this.cookies.length} CDP cookies from ${authData.domain}`);
+      logger.debug(
+        `Loaded ${this.cookies.length} CDP cookies from ${authData.domain}`,
+      );
     } catch (error) {
       throw new Error(
-        `Failed to load CDP auth: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to load CDP auth: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -116,7 +122,9 @@ export class CDPService {
   private decrypt(data: string): string {
     const parts = data.split(":");
     if (parts.length !== 2) {
-      throw new Error("Invalid encrypted data format: missing IV or ciphertext");
+      throw new Error(
+        "Invalid encrypted data format: missing IV or ciphertext",
+      );
     }
     const [ivHex, encrypted] = parts;
     const key = scryptSync(this.encryptionKey, "salt", 32);
@@ -132,10 +140,20 @@ export class CDPService {
   }
 
   private getCookieTarget(key: string): string {
-    return this.cookies.find((c) => c?.name?.toLowerCase() === key.toLowerCase())?.value || "";
+    return (
+      this.cookies.find((c) => c?.name?.toLowerCase() === key.toLowerCase())
+        ?.value || ""
+    );
   }
-  private createCommentContent(reason: string, solution: string, imageUrls: string[], mrUrl="TBD"): string {
-    const images = imageUrls.map(url => `<p><img src="${url}" alt="" data-href="" style=""/></p>`).join("\n");
+  private createCommentContent(
+    reason: string,
+    solution: string,
+    imageUrls: string[],
+    mrUrl = "TBD",
+  ): string {
+    const images = imageUrls
+      .map((url) => `<p><img src="${url}" alt="" data-href="" style=""/></p>`)
+      .join("\n");
     return `<p><br></p>
     <p>○ 原因: ${reason}</p>
     <p>○ 解决方案: ${solution}</p>
@@ -144,7 +162,10 @@ export class CDPService {
     ${images}`;
   }
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {},
+  ): Promise<T> {
     const url = `${this.host}${endpoint}`;
     const isFormData = options.body instanceof FormData;
 
@@ -153,8 +174,8 @@ export class CDPService {
       headers: {
         Cookie: this.getCookieHeader(),
         ...(isFormData ? {} : { "Content-Type": "application/json" }),
-        "Authorization": this.getCookieTarget("SID"),
-        "ResourceView": `enterpriseId:${this.getCookieTarget("enterpriseId")};productGroupId:1574936024094527490`,
+        Authorization: this.getCookieTarget("SID"),
+        ResourceView: `enterpriseId:${this.getCookieTarget("enterpriseId")};productGroupId:1574936024094527490`,
         ...options.headers,
       },
     };
@@ -176,9 +197,13 @@ export class CDPService {
 
     if (!response.ok) {
       if (response.status === 401 || response.status === 403) {
-        throw new Error("CDP auth expired. Please refresh by visiting CDP in Chrome.");
+        throw new Error(
+          "CDP auth expired. Please refresh by visiting CDP in Chrome.",
+        );
       }
-      throw new Error(`CDP request failed: ${response.status} ${response.statusText}`);
+      throw new Error(
+        `CDP request failed: ${response.status} ${response.statusText}`,
+      );
     }
     const data = (await response.json()) as T;
     logger.debug(`CDP request to ${endpoint} succeeded`, data);
@@ -190,12 +215,16 @@ export class CDPService {
       if (!existsSync(CDP_AUTH_FILE)) {
         return {
           authenticated: false,
-          error: "Auth file not found. Please install the Chrome extension and log into CDP.",
+          error:
+            "Auth file not found. Please install the Chrome extension and log into CDP.",
         };
       }
 
       const content = await readFile(CDP_AUTH_FILE, "utf-8");
-      const wrapper = JSON.parse(content) as { encrypted: boolean; data: string };
+      const wrapper = JSON.parse(content) as {
+        encrypted: boolean;
+        data: string;
+      };
 
       let authData: CDPAuthData;
       if (wrapper.encrypted) {
@@ -233,56 +262,84 @@ export class CDPService {
     }
   }
 
-  async listBugs(filter: {
-    status?: string;
-    priority?: string;
-    assignee?: string;
-    search?: string;
-    showModule?: string
-  } = {}): Promise<BugMetadata[]> {
+  async listBugs(
+    filter: {
+      status?: string;
+      priority?: string;
+      assignee?: string;
+      search?: string;
+      showModule?: string;
+    } = {},
+  ): Promise<BugMetadata[]> {
     const { showModule } = filter;
     await this.init();
     logger.debug("Listing CDP bugs", filter);
-    const param = {"pageNum":1,"pageSize":20,"toDoStatus":true, showModule, "fieldValueMap":{"title":{"fieldValue":[""]}}}
+    const param = {
+      pageNum: 1,
+      pageSize: 20,
+      toDoStatus: true,
+      showModule,
+      fieldValueMap: { title: { fieldValue: [""] } },
+    };
 
     const endpoint = `/api/v1/pcd/item-table/page`;
-    return this.request<BugMetadata[]>(endpoint, { method: "POST", body: JSON.stringify(param) });
+    return this.request<BugMetadata[]>(endpoint, {
+      method: "POST",
+      body: JSON.stringify(param),
+    });
   }
 
   async getBug(bugLabelId: string) {
     await this.init();
     // if it is in a project space, add { headers: {"projectid": "1586927655171047425"}}
-    return this.request<{data: {fieldMap: BugMetadata}}>(`/api/v1/pcd/pcd-job/job/${bugLabelId}?showModule=story`);
+    return this.request<{ data: { fieldMap: BugMetadata } }>(
+      `/api/v1/pcd/pcd-job/job/${bugLabelId}?showModule=story`,
+    );
   }
 
-  async createComment(bug: BugMetadata, reason: string, solution: string, imageUrls: string[] = []): Promise<ResponseWrapper<undefined>> {
+  async createComment(
+    bug: BugMetadata,
+    reason: string,
+    solution: string,
+    imageUrls: string[] = [],
+  ): Promise<ResponseWrapper<undefined>> {
     await this.init();
-    const cdpHost = this.host.replace(/\/+$/, '');
+    const cdpHost = this.host.replace(/\/+$/, "");
     const params = {
-      "itemId": bug.id,
-      "commentId": bug.id,
-      "commentDesc": this.createCommentContent(reason, solution, imageUrls),
-      "itemType": "bug",
-      "review": false,
-      "noticeUserSet": [],
-      "jobUrl": `${cdpHost}/product/#/defect/detail?projectId=${bug.product_id}&itemId=${bug.index_code}`
+      itemId: bug.id,
+      commentId: bug.id,
+      commentDesc: this.createCommentContent(reason, solution, imageUrls),
+      itemType: "bug",
+      review: false,
+      noticeUserSet: [],
+      jobUrl: `${cdpHost}/product/#/defect/detail?projectId=${bug.product_id}&itemId=${bug.index_code}`,
     };
-    return this.request<ResponseWrapper<undefined>>(`/api/v1/pcd/pcd-comment/create-comment`, { method: "POST", body: JSON.stringify(params) });
+    return this.request<ResponseWrapper<undefined>>(
+      `/api/v1/pcd/pcd-comment/create-comment`,
+      { method: "POST", body: JSON.stringify(params) },
+    );
   }
 
-  async uploadAttachment(bugId: string, filePath: string): Promise<string | null> {
+  async uploadAttachment(filePath: string): Promise<string | null> {
     await this.init();
     const fileName = filePath.split("/").pop() || "attachment";
     const fileData = await readFile(filePath);
     const mimeType = this.getMimeType(fileName);
 
     const formData = new FormData();
-    formData.append("files", new Blob([fileData], { type: mimeType }), fileName);
+    formData.append(
+      "files",
+      new Blob([fileData], { type: mimeType }),
+      fileName,
+    );
 
-    const res = await this.request<ResponseWrapper<string[]>>(`/api/v1/pcd/pcd-file/batch-upload-files`, {
-      method: "POST",
-      body: formData,
-    });
+    const res = await this.request<ResponseWrapper<string[]>>(
+      `/api/v1/pcd/pcd-file/batch-upload-files`,
+      {
+        method: "POST",
+        body: formData,
+      },
+    );
     return res.data?.[0] || null;
   }
 
@@ -300,12 +357,13 @@ export class CDPService {
     return mimeTypes[ext || ""] || "application/octet-stream";
   }
 
-  async uploadClipboardImage(bugId: string): Promise<string | null> {
+  async uploadClipboardImage(): Promise<string | null> {
     const { saveClipboardImage } = await import("../utils/clipboard-image.js");
     const imagePath = await saveClipboardImage();
     if (!imagePath) {
       return null;
     }
-    return this.uploadAttachment(bugId, imagePath);
+    logger.debug(`Uploading clipboard image from ${imagePath}`);
+    return this.uploadAttachment(imagePath);
   }
 }

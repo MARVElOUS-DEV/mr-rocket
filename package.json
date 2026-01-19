@@ -11,7 +11,9 @@
     "tui": "bun run src/index.tsx",
     "build:cli": "bun build --compile src/cli.ts --outfile mr-rocket",
     "build:tui": "bun build --compile src/index.tsx --outfile mr-rocket-tui",
-    "build:ext": "bun run --filter @mr-rocket/extension build"
+    "build:ext": "bun run --filter @mr-rocket/extension build",
+    "build:native-host": "bun build --compile scripts/native-host.ts --outfile dist/native-host",
+    "build:all": "bun run build:cli && bun run build:tui && bun run build:native-host"
   },
   "devDependencies": {
     "@types/bun": "latest"
