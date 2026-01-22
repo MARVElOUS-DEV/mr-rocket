@@ -92,6 +92,23 @@ export async function prepareMrDescriptionFromTemplate(
   return prepareDescriptionWithUploads(options.gitlab, options.projectId, rendered);
 }
 
+export function renderMrDescriptionTemplate(
+  template: string,
+  replacements: {
+    cdpLink?: string;
+    selfTestResults?: string;
+    utScreenshots?: string;
+    e2eScreenshots?: string;
+  },
+): string {
+  return replaceTemplatePlaceholders(template, {
+    cdpLink: replacements.cdpLink ?? "",
+    selfTestResults: replacements.selfTestResults ?? "",
+    utScreenshots: replacements.utScreenshots ?? "",
+    e2eScreenshots: replacements.e2eScreenshots ?? "",
+  });
+}
+
 export async function prepareDescriptionWithUploads(
   gitlab: GitLabService,
   projectId: number | string,

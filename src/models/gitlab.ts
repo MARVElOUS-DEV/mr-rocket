@@ -67,6 +67,7 @@ export interface CreateMRParams {
 
 export interface MRFilter {
   state?: "opened" | "closed" | "merged";
+  scope?: "created_by_me" | "assigned_to_me" | "all";
   authorId?: number;
   assigneeId?: string;
   labels?: string[];

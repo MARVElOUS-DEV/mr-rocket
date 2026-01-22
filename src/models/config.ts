@@ -17,6 +17,7 @@ export interface GitLabProject {
   e2e?: string;
   assigneeId?: number;
   reviewerId?: number;
+  reviewerIds?: Array<number>;
 }
 
 export interface GitLabConfig {

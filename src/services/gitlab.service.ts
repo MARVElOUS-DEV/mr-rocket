@@ -53,14 +53,14 @@ export class GitLabService {
     return {
       id: mr.id as number,
       iid: mr.iid as number,
-      projectId: mr.projectId as number,
+      projectId: mr.project_id as number,
       title: String(mr.title),
       description: String(mr.description || ""),
       state: mr.state as MergeRequest["state"],
-      createdAt: String(mr.createdAt),
-      updatedAt: String(mr.updatedAt),
-      sourceBranch: String(mr.sourceBranch),
-      targetBranch: String(mr.targetBranch),
+      createdAt: String(mr.created_at),
+      updatedAt: String(mr.updated_at),
+      sourceBranch: String(mr.source_branch),
+      targetBranch: String(mr.target_branch),
       author: {
         id: (mr.author as Record<string, unknown>).id as number,
         username: String((mr.author as Record<string, unknown>).username),
@@ -73,10 +73,10 @@ export class GitLabService {
             name: String((mr.assignee as Record<string, unknown>).name),
           }
         : undefined,
-      webUrl: String(mr.webUrl),
+      webUrl: String(mr.web_url),
       labels: (mr.labels as string[]) || [],
-      mergeStatus: String(mr.mergeStatus || "cannot_be_merged"),
-      hasConflicts: !!mr.hasConflicts,
+      mergeStatus: String(mr.merge_status || "cannot_be_merged"),
+      hasConflicts: !!mr.has_conflicts,
     };
   }
 
@@ -130,18 +130,124 @@ export class GitLabService {
     }
   }
 
+  private async ensureMergeRequestReviewersAssigned(
+    api: any,
+    projectId: number | string,
+    mrIid: number,
+    desiredReviewerIds: number[],
+  ): Promise<void> {
+    if (desiredReviewerIds.length === 0) {
+      return;
+    }
+
+    const uniqueDesired = Array.from(new Set(desiredReviewerIds));
+
+    const buildGitLabErrorMeta = (err: unknown): Record<string, unknown> => {
+      const anyErr = err as any;
+      const cause = anyErr?.cause;
+      return {
+        message: anyErr?.message,
+        description: cause?.description,
+        responseBody: cause?.response?.body,
+        responseText: cause?.response?.text,
+        responseStatus: cause?.response?.status,
+        stack: anyErr?.stack,
+      };
+    };
+
+    try {
+      const current = await api.MergeRequests.show(projectId, mrIid);
+      const currentReviewerIds = Array.isArray(current?.reviewers)
+        ? (current.reviewers as Array<Record<string, unknown>>)
+            .map((r) => r.id)
+            .filter((id): id is number => typeof id === "number")
+        : [];
+
+      const missing = uniqueDesired.filter(
+        (id) => !currentReviewerIds.includes(id),
+      );
+      if (missing.length === 0) {
+        return;
+      }
+
+      logger.warn(
+        "Merge request reviewers not assigned on create; attempting to update",
+        {
+          projectId,
+          mrIid,
+          desiredReviewerIds: uniqueDesired,
+          currentReviewerIds,
+        },
+      );
+
+      await api.MergeRequests.edit(projectId, mrIid, {
+        reviewerIds: uniqueDesired,
+      });
+
+      const updated = await api.MergeRequests.show(projectId, mrIid);
+      const updatedReviewerIds = Array.isArray(updated?.reviewers)
+        ? (updated.reviewers as Array<Record<string, unknown>>)
+            .map((r) => r.id)
+            .filter((id): id is number => typeof id === "number")
+        : [];
+
+      const stillMissing = uniqueDesired.filter(
+        (id) => !updatedReviewerIds.includes(id),
+      );
+      if (stillMissing.length > 0) {
+        logger.warn("Failed to assign all reviewers for merge request", {
+          projectId,
+          mrIid,
+          desiredReviewerIds: uniqueDesired,
+          updatedReviewerIds,
+          stillMissing,
+        });
+      }
+    } catch (error) {
+      logger.warn("Failed to verify/update merge request reviewers", {
+        projectId,
+        mrIid,
+        desiredReviewerIds: uniqueDesired,
+        ...buildGitLabErrorMeta(error),
+      });
+    }
+  }
+
   async createMergeRequest(
     projectId: number | string,
     params: CreateMRParams,
   ): Promise<MergeRequest> {
     const api = await this.ensureInitialized();
 
-    const reviewerIds =
-      params.reviewerIds && params.reviewerIds.length > 0
-        ? params.reviewerIds
-        : typeof params.reviewerId === "number"
-          ? [params.reviewerId]
-          : undefined;
+    const parseReviewerId = (value: unknown): number | undefined => {
+      if (typeof value === "number" && Number.isFinite(value)) {
+        return value;
+      }
+      if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!trimmed) {
+          return undefined;
+        }
+        const num = Number(trimmed);
+        return Number.isFinite(num) ? num : undefined;
+      }
+      return undefined;
+    };
+
+    const normalizedReviewerIds = Array.isArray(params.reviewerIds)
+      ? params.reviewerIds
+          .map((id) => parseReviewerId(id))
+          .filter((id): id is number => typeof id === "number")
+      : undefined;
+
+    const reviewerId = parseReviewerId(params.reviewerId);
+
+    const desiredReviewerIds =
+      normalizedReviewerIds && normalizedReviewerIds.length > 0
+        ? Array.from(new Set(normalizedReviewerIds))
+        : reviewerId
+          ? [reviewerId]
+          : [];
 
     const requestParams = {
       sourceBranch: params.sourceBranch,
@@ -150,7 +256,8 @@ export class GitLabService {
       description: params.description,
       labels: params.labels,
       assigneeId: params.assigneeId,
-      reviewerIds,
+      reviewerIds:
+        desiredReviewerIds.length > 0 ? desiredReviewerIds : undefined,
     };
 
     const options: Record<string, unknown> = {};
@@ -163,8 +270,8 @@ export class GitLabService {
     if (typeof params.assigneeId === "number") {
       options.assigneeId = params.assigneeId;
     }
-    if (reviewerIds) {
-      options.reviewerIds = reviewerIds;
+    if (desiredReviewerIds.length > 0) {
+      options.reviewerIds = desiredReviewerIds;
     }
 
     logger.debug("Creating Merge Request", { projectId, requestParams });
@@ -176,6 +283,15 @@ export class GitLabService {
         params.title,
         Object.keys(options).length > 0 ? options : undefined,
       );
+
+      if (typeof mr?.iid === "number" && desiredReviewerIds.length > 0) {
+        await this.ensureMergeRequestReviewersAssigned(
+          api,
+          projectId,
+          mr.iid,
+          desiredReviewerIds,
+        );
+      }
 
       logger.debug("Merge Request Created Successfully", {
         id: mr.id,
@@ -327,15 +443,21 @@ export class GitLabService {
   }
 
   async listMergeRequests(
-    projectId: number | string,
+    projectId: number | string | undefined,
     filter: MRFilter = {},
   ): Promise<MergeRequest[]> {
     const api = await this.ensureInitialized();
-    logger.debug("Listing Merge Requests", { projectId, filter });
+
+    const state = filter.state ?? "opened";
+    const scope =
+      filter.scope ??
+      (typeof filter.authorId === "number" ? "all" : "created_by_me");
+
+    logger.debug("Listing Merge Requests", { projectId, filter, state, scope });
     try {
-      const mrs = await api.MergeRequests.all({
-        projectId: String(projectId),
-        state: filter.state,
+      const options: Record<string, unknown> = {
+        state,
+        scope,
         authorId: filter.authorId,
         assigneeId: filter.assigneeId
           ? parseInt(filter.assigneeId, 10)
@@ -344,7 +466,13 @@ export class GitLabService {
         search: filter.search,
         createdAfter: filter.createdAfter,
         createdBefore: filter.createdBefore,
-      });
+      };
+
+      if (projectId !== undefined && String(projectId).trim()) {
+        options.projectId = String(projectId);
+      }
+
+      const mrs = await api.MergeRequests.all(options);
 
       logger.debug(`Found ${mrs.length} Merge Requests`);
       return (mrs as unknown as Array<Record<string, unknown>>).map((mr) =>

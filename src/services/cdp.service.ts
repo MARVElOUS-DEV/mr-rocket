@@ -149,15 +149,19 @@ export class CDPService {
     reason: string,
     solution: string,
     imageUrls: string[],
-    mrUrl = "TBD",
+    mrUrl?: string,
   ): string {
+    const cleanedMrUrl = mrUrl?.trim();
+    const mrLine = cleanedMrUrl
+      ? `<p>○ MR: <a href="${cleanedMrUrl}" target="_blank">${cleanedMrUrl}</a></p>`
+      : "";
     const images = imageUrls
       .map((url) => `<p><img src="${url}" alt="" data-href="" style=""/></p>`)
       .join("\n");
     return `<p><br></p>
     <p>○ 原因: ${reason}</p>
     <p>○ 解决方案: ${solution}</p>
-    <p>○ MR: <a href=\"${mrUrl}\" target=\"_blank\">${mrUrl}</a> </p>
+    ${mrLine}
     <p>○ 自测结果: </p>
     ${images}`;
   }
@@ -302,13 +306,14 @@ export class CDPService {
     reason: string,
     solution: string,
     imageUrls: string[] = [],
+    mrUrl?: string,
   ): Promise<ResponseWrapper<undefined>> {
     await this.init();
     const cdpHost = this.host.replace(/\/+$/, "");
     const params = {
       itemId: bug.id,
       commentId: bug.id,
-      commentDesc: this.createCommentContent(reason, solution, imageUrls),
+      commentDesc: this.createCommentContent(reason, solution, imageUrls, mrUrl),
       itemType: "bug",
       review: false,
       noticeUserSet: [],
