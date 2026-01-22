@@ -32,6 +32,9 @@ type MrCreateChainContext = {
   title?: string;
   description?: string;
   labels?: string[];
+  assigneeId?: number;
+  reviewerId?: number;
+  reviewerIds?: number[];
   gitlab?: GitLabService;
   system?: SystemService;
   preparedDescription?: string;
@@ -88,12 +91,36 @@ export class MrCreateCommand extends BaseCommand {
             "Project ID required. Provide via --project flag or config"
           );
         }
+
+        const projectDefaults = ctx.config?.gitlab.projects?.find(
+          (p) => String(p.id) === String(projectId)
+        );
+
+        const parseNumber = (value?: string): number | undefined => {
+          if (!value) {
+            return undefined;
+          }
+          const parsed = Number.parseInt(value, 10);
+          return Number.isFinite(parsed) ? parsed : undefined;
+        };
+
         ctx.projectId = String(projectId);
         ctx.source = ctx.args.options.get("source");
         ctx.target =
           ctx.args.options.get("target") || ctx.config?.gitlab.defaultBranch || "master";
         ctx.description = ctx.args.options.get("description") ?? ctx.stdinDescription;
         ctx.labels = cliParser.extractArray(ctx.args.options, "labels");
+
+        ctx.assigneeId =
+          parseNumber(ctx.args.options.get("assignee-id")) ?? projectDefaults?.assigneeId;
+        ctx.reviewerId =
+          parseNumber(ctx.args.options.get("reviewer-id")) ?? projectDefaults?.reviewerId;
+
+        const reviewerIds = cliParser
+          .extractArray(ctx.args.options, "reviewer-ids")
+          .map((id) => parseNumber(id))
+          .filter((id): id is number => typeof id === "number");
+        ctx.reviewerIds = reviewerIds.length > 0 ? reviewerIds : undefined;
 
         ValidationHelper.required(ctx.source, "sourceBranch");
         return next();
@@ -137,6 +164,9 @@ export class MrCreateCommand extends BaseCommand {
           title: ctx.title,
           description: ctx.preparedDescription,
           labels: ctx.labels && ctx.labels.length > 0 ? ctx.labels : undefined,
+          assigneeId: ctx.assigneeId,
+          reviewerId: ctx.reviewerId,
+          reviewerIds: ctx.reviewerIds,
         });
         return next();
       })
@@ -186,6 +216,9 @@ export class MrCreateCommand extends BaseCommand {
     help += "  --description <text>  MR description (uploads local images)\n";
     help += "  --description-stdin   Read MR description from stdin (supports pasted images)\n";
     help += "  --labels <l1,l2>      Comma-separated labels\n";
+    help += "  --assignee-id <id>    Assignee user ID (default: project config)\n";
+    help += "  --reviewer-id <id>    Reviewer user ID (default: project config)\n";
+    help += "  --reviewer-ids <ids>  Comma-separated reviewer user IDs\n";
     help += "  --project <id>        Project ID\n\n";
     help += "Example:\n";
     help += '  mr-rocket mr create --source feature/new --target master --title "Fix bug"\n';

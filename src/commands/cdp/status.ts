@@ -7,7 +7,7 @@ import { configManager } from "../../core/config-manager.js";
 export class CDPStatusCommand extends BaseCommand {
   name = "cdp status";
   description = "Check CDP authentication status";
-  category = "CDP";
+  override category = "CDP";
 
   protected async executeInternal(args: ParsedArgs): Promise<CommandOutput> {
     const config = configManager.getConfig();
@@ -53,7 +53,7 @@ export class CDPStatusCommand extends BaseCommand {
     };
   }
 
-  printHelp(): string {
+  override printHelp(): string {
     let help = super.printHelp();
     help += "Options:\n";
     help += "  --json       Output in JSON format\n\n";

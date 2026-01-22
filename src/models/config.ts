@@ -9,6 +9,14 @@ export interface AppConfig {
 export interface GitLabProject {
   name: string;
   id: string;
+  /**
+   * Optional MR description template replacements.
+   * These are inserted into the MR description template placeholders.
+   */
+  ut?: string;
+  e2e?: string;
+  assigneeId?: number;
+  reviewerId?: number;
 }
 
 export interface GitLabConfig {

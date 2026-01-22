@@ -10,6 +10,12 @@
     "jsxImportSource": "@opentui/react",
     "allowJs": true,
 
+    "baseUrl": ".",
+    "paths": {
+      "@mr-rocket/shared": ["packages/shared/src/index.ts"],
+      "@mr-rocket/shared/*": ["packages/shared/src/*"]
+    },
+
     // Bundler mode
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,

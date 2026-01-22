@@ -49,9 +49,10 @@ export function Toast() {
       width={140}
       borderStyle="single"
       borderColor={color}
-      paddingX={1}
+      paddingLeft={1}
+      paddingRight={1}
     >
-      <text color={color} attributes={TextAttributes.BOLD}>
+      <text style={{ fg: color }} attributes={TextAttributes.BOLD}>
         {icon} {toast.message}
       </text>
     </box>

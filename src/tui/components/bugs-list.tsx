@@ -55,7 +55,7 @@ export function BugsList() {
       {loading ? (
         <text attributes={TextAttributes.DIM}>Loading...</text>
       ) : error ? (
-        <text color="red">{error}</text>
+        <text style={{ fg: "red" }}>{error}</text>
       ) : bugs.length === 0 ? (
         <text>No bugs found.</text>
       ) : (
@@ -63,7 +63,9 @@ export function BugsList() {
           {bugs.map((bug) => (
             <box key={bug.id} flexDirection="row" gap={2}>
               <text>#{bug.id}</text>
-              <text color={bug.priority === "high" ? "red" : undefined}>[{bug.priority}]</text>
+              <text style={bug.priority === "high" ? { fg: "red" } : undefined}>
+                [{bug.priority}]
+              </text>
               <text flexGrow={1}>{bug.title}</text>
               <text attributes={TextAttributes.DIM}>{bug.status}</text>
             </box>

@@ -45,7 +45,7 @@ class CommandRegistry {
         }
         return true;
       } else {
-        console.log(error(output.error?.message || "Command failed"));
+        console.log(error(output.message || output.error?.message || "Command failed"));
         return false;
       }
     } catch (err) {

@@ -17,6 +17,8 @@ import { WikiReadCommand } from "./commands/wiki/read";
 import { CDPStatusCommand } from "./commands/cdp/status";
 import { CDPBugsListCommand } from "./commands/cdp/bugs-list";
 import { CDPBugsShowCommand } from "./commands/cdp/bugs-show";
+import { BugAttachCommand } from "./commands/bug/attach";
+import { BugImagesCommand } from "./commands/bug/images";
 
 async function main() {
   const parsed = cliParser.parse(process.argv);
@@ -52,7 +54,7 @@ async function main() {
     process.exit(0);
   }
 
-  if (parsed.positional.length === 0 || parsed.help) {
+  if (parsed.positional.length === 0) {
     commandRegistry.printGlobalHelp();
     process.exit(0);
   }
@@ -92,5 +94,7 @@ commandRegistry.register(new WikiReadCommand());
 commandRegistry.register(new CDPStatusCommand());
 commandRegistry.register(new CDPBugsListCommand());
 commandRegistry.register(new CDPBugsShowCommand());
+commandRegistry.register(new BugAttachCommand());
+commandRegistry.register(new BugImagesCommand());
 
 main();

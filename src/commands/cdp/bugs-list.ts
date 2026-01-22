@@ -7,7 +7,7 @@ import { configManager } from "../../core/config-manager.js";
 export class CDPBugsListCommand extends BaseCommand {
   name = "cdp bugs list";
   description = "List bugs from CDP";
-  category = "CDP";
+  override category = "CDP";
 
   protected async executeInternal(args: ParsedArgs): Promise<CommandOutput> {
     const config = configManager.getConfig();
@@ -63,7 +63,7 @@ export class CDPBugsListCommand extends BaseCommand {
     };
   }
 
-  printHelp(): string {
+  override printHelp(): string {
     let help = super.printHelp();
     help += "Options:\n";
     help += "  --status <status>      Filter by status (e.g., open, closed)\n";

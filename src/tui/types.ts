@@ -16,6 +16,7 @@ export type Screen =
   | "mr-detail"
   | "bugs-list"
   | "bug-comment"
+  | "bug-attach"
   | "wiki-search"
   | "history";
 

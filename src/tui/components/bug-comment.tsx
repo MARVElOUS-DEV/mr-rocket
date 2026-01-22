@@ -101,13 +101,14 @@ export function BugComment() {
 
       {message && (
         <text
-          color={
-            status === "error"
-              ? "red"
-              : status === "success"
-                ? "green"
-                : "yellow"
-          }
+          style={{
+            fg:
+              status === "error"
+                ? "red"
+                : status === "success"
+                  ? "green"
+                  : "yellow",
+          }}
         >
           {message}
         </text>

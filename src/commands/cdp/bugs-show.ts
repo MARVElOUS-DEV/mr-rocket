@@ -7,7 +7,7 @@ import { configManager } from "../../core/config-manager.js";
 export class CDPBugsShowCommand extends BaseCommand {
   name = "cdp bugs show";
   description = "Show details of a specific bug";
-  category = "CDP";
+  override category = "CDP";
 
   protected async executeInternal(args: ParsedArgs): Promise<CommandOutput> {
     const config = configManager.getConfig();
@@ -28,7 +28,8 @@ export class CDPBugsShowCommand extends BaseCommand {
     }
 
     const service = new CDPService(config.cdp);
-    const bug = await service.getBug(bugId);
+    const response = await service.getBug(bugId);
+    const bug = response.data.fieldMap;
 
     if (args.flags.get("json")) {
       return {
@@ -59,7 +60,7 @@ export class CDPBugsShowCommand extends BaseCommand {
     };
   }
 
-  printHelp(): string {
+  override printHelp(): string {
     let help = super.printHelp();
     help += "Arguments:\n";
     help += "  <bug-id>   The ID of the bug to show\n\n";

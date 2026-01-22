@@ -8,6 +8,7 @@ import { MRList } from "./tui/components/mr-list.js";
 import { MRCreate } from "./tui/components/mr-create.js";
 import { BugsList } from "./tui/components/bugs-list.js";
 import { BugComment } from "./tui/components/bug-comment.js";
+import { BugAttach } from "./tui/components/bug-attach.js";
 import { HistoryList } from "./tui/components/history-list.js";
 import { WikiSearch } from "./tui/components/wiki-search.js";
 import { Toast } from "./tui/components/toast.js";
@@ -25,7 +26,7 @@ function App() {
 
   useKeyboard((key) => {
     const input = key.name;
-    if (state.currentScreen === "mr-create" || state.currentScreen === "bug-comment") {
+    if (state.currentScreen === "mr-create" || state.currentScreen === "bug-comment" || state.currentScreen === "bug-attach") {
       return;
     }
     if (input === "q") {
@@ -47,6 +48,8 @@ function App() {
       store.dispatch({ type: "NAVIGATE", screen: "history" });
     } else if (input === "w") {
       store.dispatch({ type: "NAVIGATE", screen: "wiki-search" });
+    } else if (input === "a") {
+      store.dispatch({ type: "NAVIGATE", screen: "bug-attach" });
     }
   });
 
@@ -62,6 +65,8 @@ function App() {
         return <BugsList />;
       case "bug-comment":
         return <BugComment />;
+      case "bug-attach":
+        return <BugAttach />;
       case "history":
         return <HistoryList />;
       case "wiki-search":

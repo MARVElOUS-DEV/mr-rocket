@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
-import { unlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readdir, unlink, writeFile } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
 import { basename, extname, isAbsolute, join, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import type { GitLabService } from "../services/gitlab.service.js";
@@ -17,12 +17,88 @@ const ESC = "\u001b";
 const ST = `${ESC}\\`;
 const KITTY_PREFIX = "\u001b_G";
 
+const BUG_IMAGES_DIR = join(homedir(), ".mr-rocket", "images");
+
+export const DEFAULT_UT_SCREENSHOTS =
+  "![aidp_ut](/uploads/7a271a8209aca8e0e93347aa8f8a79fe/aidp_ut.png)";
+export const DEFAULT_E2E_SCREENSHOTS =
+  "![aidp_e2e](/uploads/73f03b5669e17a0842237377a1c63123/aidp_e2e.png)";
+
+export const CDP_LINK_SUFFIX_TEMPLATE =
+  "/productGroup/#/defect/detail?productGroupId={productGroupId}&itemId={itemId}";
+
+export const DESCRIPTION_TEMPLATE = `
+<h3>CDP链接:</h3>{{cdpLink}}
+
+<h3>修改描述:</h3>
+
+<h3>后端修改依赖:</h3>
+
+<h3>自测结果:</h3>
+{{selfTestResults}}
+
+<h3>UT截图:</h3>
+{{utScreenshots}}
+
+<h3>E2E截图:</h3>
+{{e2eScreenshots}}`;
+
+type PrepareMrDescriptionOptions = {
+  gitlab: GitLabService;
+  projectId: number | string;
+  template?: string;
+  bugId?: string;
+  cdpHost?: string;
+  cdpProductGroupId?: string;
+  cdpItemId?: string;
+  utScreenshots?: string;
+  e2eScreenshots?: string;
+};
+
+export async function prepareMrDescriptionFromTemplate(
+  options: PrepareMrDescriptionOptions,
+): Promise<string> {
+  const template = options.template ?? DESCRIPTION_TEMPLATE;
+
+  const cdpLink =
+    options.cdpHost && options.cdpProductGroupId && options.cdpItemId
+      ? buildCdpBugLink(
+          options.cdpHost,
+          options.cdpProductGroupId,
+          options.cdpItemId,
+        )
+      : "";
+
+  const selfTestResults = options.bugId
+    ? await uploadBugImagesAsMarkdown(
+        options.gitlab,
+        options.projectId,
+        options.bugId,
+      )
+    : "";
+
+  const utScreenshots =
+    options.utScreenshots?.trim() || DEFAULT_UT_SCREENSHOTS;
+  const e2eScreenshots =
+    options.e2eScreenshots?.trim() || DEFAULT_E2E_SCREENSHOTS;
+
+  const rendered = replaceTemplatePlaceholders(template, {
+    cdpLink,
+    selfTestResults,
+    utScreenshots,
+    e2eScreenshots,
+  });
+
+  return prepareDescriptionWithUploads(options.gitlab, options.projectId, rendered);
+}
+
 export async function prepareDescriptionWithUploads(
   gitlab: GitLabService,
   projectId: number | string,
-  description: string
+  description: string,
 ): Promise<string> {
-  const { text, tempFiles } = await replaceTerminalImagesWithMarkdown(description);
+  const { text, tempFiles } =
+    await replaceTerminalImagesWithMarkdown(description);
   const cleanupFiles: string[] = [...tempFiles];
   const imageRegex = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
   const matches = Array.from(text.matchAll(imageRegex));
@@ -60,7 +136,8 @@ export async function prepareDescriptionWithUploads(
     const cacheKey = imagePath.startsWith("data:") ? imagePath : resolvedPath;
     const cachedUrl = uploadCache.get(cacheKey);
     const uploadUrl =
-      cachedUrl ?? (await gitlab.uploadProjectFile(projectId, resolvedPath)).url;
+      cachedUrl ??
+      (await gitlab.uploadProjectFile(projectId, resolvedPath)).url;
 
     uploadCache.set(cacheKey, uploadUrl);
     const replacement = `![${altText}](${uploadUrl})`;
@@ -71,8 +148,80 @@ export async function prepareDescriptionWithUploads(
   return updated;
 }
 
+export function buildCdpBugLink(
+  cdpHost: string,
+  productGroupId: string,
+  itemId: string,
+): string {
+  const base = cdpHost.replace(/\/+$/, "");
+  const suffix = CDP_LINK_SUFFIX_TEMPLATE.replace(
+    "{productGroupId}",
+    encodeURIComponent(productGroupId),
+  ).replace("{itemId}", encodeURIComponent(itemId));
+  return `${base}${suffix}`;
+}
+
+async function uploadBugImagesAsMarkdown(
+  gitlab: GitLabService,
+  projectId: number | string,
+  bugId: string,
+): Promise<string> {
+  const files = await listBugImageFiles(bugId);
+  if (files.length === 0) {
+    return "";
+  }
+
+  const snippets: string[] = [];
+  for (const filePath of files) {
+    const upload = await gitlab.uploadProjectFile(projectId, filePath);
+    const markdown = upload.markdown?.trim();
+    if (markdown) {
+      snippets.push(markdown);
+    } else {
+      const alt = basename(filePath, extname(filePath));
+      snippets.push(`![${alt}](${upload.url})`);
+    }
+  }
+  return snippets.join("\n\n");
+}
+
+async function listBugImageFiles(bugId: string): Promise<string[]> {
+  const dir = join(BUG_IMAGES_DIR, bugId);
+  if (!existsSync(dir)) {
+    return [];
+  }
+
+  const entries = await readdir(dir, { withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isFile() && isSupportedImage(entry.name))
+    .map((entry) => join(dir, entry.name))
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function isSupportedImage(filename: string): boolean {
+  const ext = extname(filename).toLowerCase();
+  return (
+    ext === ".png" ||
+    ext === ".jpg" ||
+    ext === ".jpeg" ||
+    ext === ".gif" ||
+    ext === ".webp"
+  );
+}
+
+function replaceTemplatePlaceholders(
+  template: string,
+  replacements: Record<string, string>,
+): string {
+  let updated = template;
+  for (const [key, value] of Object.entries(replacements)) {
+    updated = updated.replaceAll(`{{${key}}}`, value);
+  }
+  return updated;
+}
+
 async function replaceTerminalImagesWithMarkdown(
-  description: string
+  description: string,
 ): Promise<TerminalImageReplacement> {
   const iterm = await replaceItermImages(description);
   const kitty = await replaceKittyImages(iterm.text, iterm.tempFiles);
@@ -80,7 +229,7 @@ async function replaceTerminalImagesWithMarkdown(
 }
 
 async function replaceItermImages(
-  description: string
+  description: string,
 ): Promise<TerminalImageReplacement> {
   let updated = description;
   const tempFiles: string[] = [];
@@ -117,7 +266,10 @@ async function replaceItermImages(
     tempFiles.push(tempPath);
     const altText = buildAltText(fileName, tempFiles.length);
     const markdown = `![${altText}](${tempPath})`;
-    updated = updated.slice(0, start) + markdown + updated.slice(endIndex + terminatorLength);
+    updated =
+      updated.slice(0, start) +
+      markdown +
+      updated.slice(endIndex + terminatorLength);
     searchIndex = start + markdown.length;
   }
 
@@ -126,7 +278,7 @@ async function replaceItermImages(
 
 async function replaceKittyImages(
   description: string,
-  existingTempFiles: string[]
+  existingTempFiles: string[],
 ): Promise<TerminalImageReplacement> {
   let updated = description;
   const tempFiles = [...existingTempFiles];
@@ -167,7 +319,8 @@ async function replaceKittyImages(
     tempFiles.push(tempPath);
     const altText = buildAltText(undefined, tempFiles.length);
     const markdown = `![${altText}](${tempPath})`;
-    updated = updated.slice(0, start) + markdown + updated.slice(endIndex + ST.length);
+    updated =
+      updated.slice(0, start) + markdown + updated.slice(endIndex + ST.length);
     searchIndex = start + markdown.length;
   }
 
@@ -176,7 +329,7 @@ async function replaceKittyImages(
 
 function findTerminator(
   text: string,
-  startIndex: number
+  startIndex: number,
 ): { endIndex: number; terminatorLength: number } {
   const belIndex = text.indexOf(ITERM_BEL, startIndex);
   const stIndex = text.indexOf(ST, startIndex);
@@ -190,12 +343,12 @@ function findTerminator(
   return { endIndex: -1, terminatorLength: 0 };
 }
 
-function parseParamList(
-  text: string,
-  separator: string
-): Map<string, string> {
+function parseParamList(text: string, separator: string): Map<string, string> {
   const params = new Map<string, string>();
-  const parts = text.split(separator).map((part) => part.trim()).filter(Boolean);
+  const parts = text
+    .split(separator)
+    .map((part) => part.trim())
+    .filter(Boolean);
   for (const part of parts) {
     const eqIndex = part.indexOf("=");
     if (eqIndex === -1) {
@@ -247,10 +400,12 @@ async function writeDataUriToTempFile(dataUri: string): Promise<string> {
 
 async function writeTempImageFile(
   buffer: Buffer,
-  nameHint?: string
+  nameHint?: string,
 ): Promise<string> {
   const safeName = sanitizeFilename(nameHint ?? "pasted-image");
-  const extension = normalizeExtension(extname(safeName).slice(1)) || detectImageExtension(buffer);
+  const extension =
+    normalizeExtension(extname(safeName).slice(1)) ||
+    detectImageExtension(buffer);
   const baseName = safeName.replace(new RegExp(`\\.${extension}$`, "i"), "");
   const fileName = `${baseName || "pasted-image"}-${randomUUID()}.${extension}`;
   const filePath = join(tmpdir(), fileName);
@@ -260,7 +415,12 @@ async function writeTempImageFile(
 
 function detectImageExtension(buffer: Buffer): string {
   if (buffer.length >= 12) {
-    if (buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47) {
+    if (
+      buffer[0] === 0x89 &&
+      buffer[1] === 0x50 &&
+      buffer[2] === 0x4e &&
+      buffer[3] === 0x47
+    ) {
       return "png";
     }
     if (buffer[0] === 0xff && buffer[1] === 0xd8) {
@@ -333,6 +493,6 @@ async function cleanupTempFiles(paths: string[]): Promise<void> {
       } catch {
         // Ignore cleanup failures.
       }
-    })
+    }),
   );
 }

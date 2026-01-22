@@ -61,6 +61,8 @@ export interface CreateMRParams {
   description?: string;
   labels?: string[];
   assigneeId?: number;
+  reviewerId?: number;
+  reviewerIds?: number[];
 }
 
 export interface MRFilter {
