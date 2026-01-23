@@ -48,7 +48,17 @@ export function MRList() {
             mrs.map((mr) => (
               <box key={mr.iid} flexDirection="row" gap={2}>
                 <text>!{mr.iid}</text>
-                <text flexGrow={1}>{mr.title}</text>
+                <text flexGrow={1}>
+                  {mr.webUrl ? (
+                    <a href={mr.webUrl}>
+                      <u>
+                        <span fg="cyan">{mr.title}</span>
+                      </u>
+                    </a>
+                  ) : (
+                    mr.title
+                  )}
+                </text>
                 <text attributes={TextAttributes.DIM}>{mr.author.name}</text>
               </box>
             ))
