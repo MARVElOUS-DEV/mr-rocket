@@ -49,6 +49,11 @@ export class ValidationHelper {
     this.nonEmpty(params.title, "title");
     this.validBranch(params.sourceBranch);
     this.validBranch(params.targetBranch);
+    if (params.sourceBranch.trim() === params.targetBranch.trim()) {
+      throw new ValidationError(
+        "Source branch and target branch cannot be the same"
+      );
+    }
   }
 
   static validateIssueParams(params: { title: string }): void {

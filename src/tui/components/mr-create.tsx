@@ -122,6 +122,8 @@ export function MRCreate() {
     target.insertText(DESCRIPTION_TEMPLATE);
   }, []);
 
+  // Poll textarea values for live preview since OpenTUI textarea doesn't
+  // expose onChange callbacks. Only updates state when values change.
   useEffect(() => {
     const id = setInterval(() => {
       const next: MrCreateFormSnapshot = {
@@ -339,19 +341,24 @@ export function MRCreate() {
         (rawDescription.includes("{{cdpLink}}") ||
           (!title && hasTemplatePlaceholders));
 
-      const cdpBug = needsCdpBug
-        ? await (async () => {
-            const cdpService = new CDPService(config.cdp!);
-            const { data } = await cdpService.getBug(bugId);
-            return data.fieldMap;
-          })()
+      // Reuse the preview CDP bug data if it matches the current bugId,
+      // otherwise fetch it fresh (handles race condition if user submits
+      // before preview fetch completes)
+      const resolvedCdpBug = needsCdpBug
+        ? cdpBug && previewBugId === bugId
+          ? cdpBug
+          : await (async () => {
+              const cdpService = new CDPService(config.cdp!);
+              const { data } = await cdpService.getBug(bugId);
+              return data.fieldMap;
+            })()
         : undefined;
 
       let resolvedTitle = title;
       if (bugId && !title) {
         // Fetch bug title from CDP
-        if (cdpBug) {
-          resolvedTitle = `bug ${bugId}: ${cdpBug.title}`;
+        if (resolvedCdpBug) {
+          resolvedTitle = `bug ${bugId}: ${resolvedCdpBug.title}`;
         } else if (!config.cdp) {
           resolvedTitle = `bug ${bugId}:`;
         } else {
@@ -376,8 +383,8 @@ export function MRCreate() {
             template: rawDescription.trim() ? rawDescription : undefined,
             bugId: bugId || undefined,
             cdpHost: config.cdp?.host,
-            cdpProductGroupId: cdpBug?.product_id,
-            cdpItemId: cdpBug?.index_code,
+            cdpProductGroupId: resolvedCdpBug?.product_id,
+            cdpItemId: resolvedCdpBug?.index_code,
             utScreenshots: selectedProject?.utScreenshots,
             e2eScreenshots: selectedProject?.e2eScreenshots,
           })
@@ -496,8 +503,8 @@ export function MRCreate() {
           </box>
 
           <box flexDirection="column">
-            <text attributes={TextAttributes.BOLD} style={{ fg: "red" }}>
-              Bug ID (Required)
+            <text attributes={TextAttributes.BOLD}>
+              Bug ID (Optional)
             </text>
             <box style={{ border: true, height: 3 }}>
               <textarea
@@ -569,7 +576,7 @@ export function MRCreate() {
               targetBranch: {previewTargetBranch}
             </text>
             <text attributes={TextAttributes.DIM}>
-              bugId: {previewBugId || "<missing>"}
+              bugId: {previewBugId || "<none>"}
             </text>
             <text attributes={TextAttributes.DIM}>
               title: {previewResolvedTitle}

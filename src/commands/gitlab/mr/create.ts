@@ -25,6 +25,7 @@ import { prepareDescriptionWithUploads } from "../../../utils/description-images
 type MrCreateChainContext = {
   args: ParsedArgs;
   stdinDescription?: string;
+  dryRun?: boolean;
   config?: AppConfig;
   projectId?: string;
   source?: string;
@@ -52,7 +53,8 @@ export class MrCreateCommand extends BaseCommand {
       args.flags.has("description-stdin") && !args.options.get("description")
         ? await this.readDescriptionFromStdin(args.json)
         : undefined;
-    const context: MrCreateChainContext = { args, stdinDescription };
+    const dryRun = args.flags.has("dry-run");
+    const context: MrCreateChainContext = { args, stdinDescription, dryRun };
 
     const chain = new ServiceChain<MrCreateChainContext>()
       .use(withSystemService())
@@ -144,7 +146,8 @@ export class MrCreateCommand extends BaseCommand {
           title: ctx.title ?? "",
         });
 
-        if (ctx.description) {
+        // Skip description upload in dry-run mode
+        if (ctx.description && !ctx.dryRun) {
           ctx.preparedDescription = await prepareDescriptionWithUploads(
             ctx.gitlab,
             ctx.projectId,
@@ -155,6 +158,10 @@ export class MrCreateCommand extends BaseCommand {
         return next();
       })
       .use(async (ctx, next) => {
+        // Skip actual MR creation in dry-run mode
+        if (ctx.dryRun) {
+          return next();
+        }
         if (!ctx.gitlab || !ctx.projectId || !ctx.source || !ctx.target || !ctx.title) {
           throw new Error("Missing required MR parameters");
         }
@@ -181,6 +188,31 @@ export class MrCreateCommand extends BaseCommand {
         return next();
       })
       .use(withOutput((ctx) => {
+        // Handle dry-run output
+        if (ctx.dryRun) {
+          const dryRunData = {
+            projectId: ctx.projectId,
+            sourceBranch: ctx.source,
+            targetBranch: ctx.target,
+            title: ctx.title,
+            description: ctx.description ? "(description provided)" : undefined,
+            labels: ctx.labels,
+            assigneeId: ctx.assigneeId,
+            reviewerId: ctx.reviewerId,
+            reviewerIds: ctx.reviewerIds,
+          };
+          return {
+            success: true,
+            data: dryRunData,
+            message: `[DRY-RUN] Would create MR: ${ctx.title}`,
+            meta: {
+              dryRun: true,
+              sourceBranch: ctx.source,
+              targetBranch: ctx.target,
+            },
+          };
+        }
+
         const mr = ctx.mr;
         if (!mr) {
           throw new Error("Merge request was not created");
@@ -219,9 +251,11 @@ export class MrCreateCommand extends BaseCommand {
     help += "  --assignee-id <id>    Assignee user ID (default: project config)\n";
     help += "  --reviewer-id <id>    Reviewer user ID (default: project config)\n";
     help += "  --reviewer-ids <ids>  Comma-separated reviewer user IDs\n";
-    help += "  --project <id>        Project ID\n\n";
+    help += "  --project <id>        Project ID\n";
+    help += "  --dry-run             Validate parameters without creating MR\n\n";
     help += "Example:\n";
     help += '  mr-rocket mr create --source feature/new --target master --title "Fix bug"\n';
+    help += '  mr-rocket mr create --source feature/new --dry-run  # Validate only\n';
     return help;
   }
 
