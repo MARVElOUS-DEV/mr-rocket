@@ -94,26 +94,48 @@ export function MRList() {
           ) : (
             mrs.map((mr, index) => {
               const isSelected = index === selectedIndex;
+              const selectedStyle = isSelected
+                ? { fg: "white", bg: "#1f2d3d" }
+                : undefined;
+              const linkFg = isSelected ? "white" : "blue";
               return (
-                <box key={mr.iid} flexDirection="row" gap={2}>
-                  <text attributes={isSelected ? TextAttributes.BOLD : TextAttributes.DIM}>
+                <box
+                  key={mr.iid}
+                  flexDirection="row"
+                  gap={2}
+                  style={isSelected ? { backgroundColor: "#1f2d3d" } : undefined}
+                >
+                  <text
+                    attributes={isSelected ? TextAttributes.BOLD : TextAttributes.DIM}
+                    style={selectedStyle}
+                  >
                     {isSelected ? ">" : " "}
                   </text>
-                  <text attributes={isSelected ? TextAttributes.BOLD : TextAttributes.DIM}>
+                  <text
+                    attributes={isSelected ? TextAttributes.BOLD : TextAttributes.DIM}
+                    style={selectedStyle}
+                  >
                     !{mr.iid}
                   </text>
-                  <text flexGrow={1}>
+                  <text flexGrow={1} style={selectedStyle}>
                     {mr.webUrl ? (
                       <a href={mr.webUrl}>
                         <u>
-                          <span fg={isSelected ? "cyan" : "blue"}>{mr.title}</span>
+                          <span fg={linkFg} bg={isSelected ? "#1f2d3d" : undefined}>
+                            {mr.title}
+                          </span>
                         </u>
                       </a>
                     ) : (
                       mr.title
                     )}
                   </text>
-                  <text attributes={TextAttributes.DIM}>{mr.author.name}</text>
+                  <text
+                    attributes={isSelected ? TextAttributes.BOLD : TextAttributes.DIM}
+                    style={selectedStyle}
+                  >
+                    {mr.author.name}
+                  </text>
                 </box>
               );
             })
