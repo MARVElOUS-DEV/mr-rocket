@@ -2,11 +2,9 @@ import { BaseCommand } from "../base-command";
 import type { ParsedArgs } from "../../utils/cli-parser";
 import type { CommandOutput } from "../../types/command-output";
 import { saveClipboardImage } from "../../utils/clipboard-image";
-import { homedir } from "node:os";
-import { join, extname } from "node:path";
-import { existsSync, mkdirSync, copyFileSync, readdirSync } from "node:fs";
-
-const IMAGES_DIR = join(homedir(), ".mr-rocket", "images");
+import { extname, join } from "node:path";
+import { existsSync, copyFileSync, readdirSync } from "node:fs";
+import { ensureBugDir, getNextSequence } from "../../utils/bug-image-store";
 
 export class BugAttachCommand extends BaseCommand {
   name = "bug attach";
@@ -14,21 +12,22 @@ export class BugAttachCommand extends BaseCommand {
   override category = "Bug";
 
   protected async executeInternal(args: ParsedArgs): Promise<CommandOutput> {
-    const bugId = args.positional[0];
+    const bugId = args.positional[0]?.trim();
     if (!bugId) {
       return { success: false, message: "Usage: bug attach <bugId> [--file <path>]" };
     }
 
     const filePath = args.options.get("file");
-    const bugDir = join(IMAGES_DIR, bugId);
-
-    if (!existsSync(bugDir)) {
-      mkdirSync(bugDir, { recursive: true });
+    let bugDir: string;
+    try {
+      bugDir = ensureBugDir(bugId);
+    } catch (error) {
+      return { success: false, message: error instanceof Error ? error.message : String(error) };
     }
 
     // Get next sequence number
     const existing = existsSync(bugDir) ? readdirSync(bugDir) : [];
-    const seq = String(existing.length + 1).padStart(3, "0");
+    const seq = getNextSequence(existing);
 
     let sourcePath: string | null;
     let ext: string;
@@ -44,7 +43,7 @@ export class BugAttachCommand extends BaseCommand {
       if (!sourcePath) {
         return { success: false, message: "No image found in clipboard" };
       }
-      ext = ".png";
+      ext = extname(sourcePath) || ".png";
     }
 
     const destPath = join(bugDir, `${seq}${ext}`);

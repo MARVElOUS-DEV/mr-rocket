@@ -1,5 +1,5 @@
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { extname, join } from "node:path";
 import { existsSync, copyFileSync } from "node:fs";
 import { $ } from "bun";
 
@@ -9,7 +9,7 @@ import { $ } from "bun";
  * Returns null if no image in clipboard.
  */
 export async function saveClipboardImage(): Promise<string | null> {
-  const tempPath = join(tmpdir(), `mr-rocket-clipboard-${Date.now()}.png`);
+  const baseName = `mr-rocket-clipboard-${Date.now()}`;
 
   // First try to get file path from clipboard (when file is copied in Finder)
   const fileScript = `
@@ -23,11 +23,14 @@ export async function saveClipboardImage(): Promise<string | null> {
   
   const filePath = (await $`osascript -e ${fileScript}`.text()).trim();
   if (filePath && existsSync(filePath) && /\.(png|jpg|jpeg|gif|webp|bmp)$/i.test(filePath)) {
+    const ext = extname(filePath).toLowerCase() || ".png";
+    const tempPath = join(tmpdir(), `${baseName}${ext}`);
     copyFileSync(filePath, tempPath);
     return tempPath;
   }
 
   // Fall back to raw PNG data from clipboard
+  const tempPath = join(tmpdir(), `${baseName}.png`);
   const pngScript = `
     set theFile to POSIX file "${tempPath}"
     try
