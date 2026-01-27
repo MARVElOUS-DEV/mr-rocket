@@ -1,8 +1,8 @@
 import { BaseCommand } from "../../base-command.ts";
 import type { ParsedArgs } from "../../../utils/cli-parser.ts";
-import type { CommandOutput } from "../../../models/command-output.ts";
-import type { AppConfig } from "../../../models/config.ts";
-import type { MergeRequest } from "../../../models/gitlab.ts";
+import type { CommandOutput } from "../../../types/command-output.ts";
+import type { AppConfig } from "../../../types/config.ts";
+import type { MergeRequest } from "../../../types/gitlab.ts";
 import type { GitLabService } from "../../../services/gitlab.service.ts";
 import type { SystemService } from "../../../services/system.service.ts";
 import { GitLabService as GitLabServiceClass } from "../../../services/gitlab.service.ts";
@@ -18,7 +18,7 @@ import {
   withOutput,
   withOutputError,
 } from "../../../core/service-chain-steps.ts";
-import { buildErrorOutput } from "../../../core/command-output-helpers.ts";
+import { buildErrorOutput } from "../../../utils/command-output-helpers.ts";
 import { ValidationHelper, ValidationError } from "../../../utils/validation.ts";
 import { prepareDescriptionWithUploads } from "../../../utils/description-images.ts";
 

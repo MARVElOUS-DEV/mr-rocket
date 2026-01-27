@@ -1,5 +1,5 @@
-import type { CommandOutput, TableOutput } from "../models/command-output.js";
-import { success, error, warning, info } from "./colors.js";
+import type { CommandOutput, TableOutput } from "../types/command-output.js";
+import { success, error, warning, info } from "../utils/colors.js";
 
 export class OutputFormatter {
   format(output: CommandOutput, jsonMode: boolean): string {

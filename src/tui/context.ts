@@ -1,4 +1,4 @@
-import type { MergeRequest, Issue } from "../models/gitlab.js";
+import type { MergeRequest, Issue } from "../types/gitlab.js";
 
 export class TUIContext {
   private static instance: TUIContext;

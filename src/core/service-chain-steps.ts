@@ -1,5 +1,5 @@
-import type { AppConfig } from "../models/config.ts";
-import type { CommandOutput } from "../models/command-output.ts";
+import type { AppConfig } from "../types/config.ts";
+import type { CommandOutput } from "../types/command-output.ts";
 import type { ServiceChainStep } from "./service-chain.ts";
 import { GitLabService } from "../services/gitlab.service.ts";
 import { SystemService } from "../services/system.service.ts";

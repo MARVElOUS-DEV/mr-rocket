@@ -1,6 +1,6 @@
 import { BaseCommand } from "../base-command";
 import type { ParsedArgs } from "../../utils/cli-parser";
-import type { CommandOutput } from "../../models/command-output";
+import type { CommandOutput } from "../../types/command-output";
 import { saveClipboardImage } from "../../utils/clipboard-image";
 import { homedir } from "node:os";
 import { join, extname } from "node:path";

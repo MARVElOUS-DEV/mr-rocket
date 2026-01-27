@@ -2,7 +2,7 @@ import type { TextareaRenderable } from "@opentui/core";
 import { TextAttributes } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
 import { useMemo, useRef, useState } from "react";
-import type { ConfluenceSearchResult } from "../../models/confluence.js";
+import type { ConfluenceSearchResult } from "../../types/confluence.js";
 import { configManager } from "../../core/config-manager.js";
 import { ValidationError, ValidationHelper } from "../../utils/validation.js";
 import { getConfluenceService } from "../client.js";

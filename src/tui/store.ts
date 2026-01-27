@@ -1,6 +1,4 @@
-import type { MergeRequest } from "../models/gitlab.js";
-import type { AppAction, AppState } from "./types.js";
-import type { BugMetadata } from "../services/cdp.service.js";
+import type { AppAction, AppState } from "../types/tui.js";
 
 export interface TUIStore {
   getState(): AppState;

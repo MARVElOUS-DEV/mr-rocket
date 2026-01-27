@@ -1,4 +1,4 @@
-import type { CommandOutput } from "../models/command-output.ts";
+import type { CommandOutput } from "../types/command-output.ts";
 
 export const buildErrorOutput = (
   error: Error,

@@ -2,7 +2,7 @@ import { TextAttributes } from "@opentui/core";
 import { useEffect, useState } from "react";
 import { getStore } from "../store.js";
 import { historyManager } from "../../core/history-manager.js";
-import type { HistoryEntry } from "../../models/history.js";
+import type { HistoryEntry } from "../../types/history.js";
 
 export function HistoryList() {
   const store = getStore();

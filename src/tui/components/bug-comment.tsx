@@ -7,7 +7,7 @@ import { basename, extname, join } from "node:path";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CDPService } from "../../services/cdp.service.js";
 import { configManager } from "../../core/config-manager.js";
-import type { MergeRequest } from "../../models/gitlab.js";
+import type { MergeRequest } from "../../types/gitlab.js";
 import { getGitLabService } from "../client.js";
 import { getStore } from "../store.js";
 import { showToast } from "./toast.js";

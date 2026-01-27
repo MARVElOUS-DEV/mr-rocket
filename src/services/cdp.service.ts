@@ -5,7 +5,7 @@ import { existsSync } from "node:fs";
 import { createDecipheriv, scryptSync } from "node:crypto";
 import { logger } from "../core/logger.js";
 import type { CDPCookie, CDPAuthData } from "@mr-rocket/shared";
-import type { CDPConfig, CDPTLSConfig } from "../models/config.js";
+import type { CDPConfig, CDPTLSConfig } from "../types/config.js";
 
 const CDP_AUTH_FILE = join(homedir(), ".mr-rocket", "cdp-auth.json");
 const MAX_AUTH_AGE_MS = 12 * 60 * 60 * 1000; // 12 hours

@@ -2,11 +2,11 @@ import { writeFile, readFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { existsSync } from "node:fs";
-import type { HistoryEntry, HistoryFilter } from "../models/history.js";
-import type { CommandOutput } from "../models/command-output.js";
-import { error } from "./colors.js";
+import type { HistoryEntry, HistoryFilter } from "../types/history.js";
+import type { CommandOutput } from "../types/command-output.js";
+import { error } from "../utils/colors.js";
 import { randomUUID } from "node:crypto";
-import { DEFAULT_CONFIG } from "../models/config.js";
+import { DEFAULT_CONFIG } from "../types/config.js";
 
 const CONFIG_DIR = join(homedir(), ".mr-rocket");
 const HISTORY_FILE = join(CONFIG_DIR, "history.json");

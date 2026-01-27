@@ -1,6 +1,6 @@
 import { BaseCommand } from "../base-command.ts";
 import type { ParsedArgs } from "../../utils/cli-parser.ts";
-import type { CommandOutput } from "../../models/command-output.ts";
+import type { CommandOutput } from "../../types/command-output.ts";
 import { configManager } from "../../core/config-manager.ts";
 import { logger } from "../../core/logger.ts";
 import { ConfluenceService } from "../../services/confluence.service.ts";

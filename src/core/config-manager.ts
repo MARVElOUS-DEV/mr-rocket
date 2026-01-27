@@ -2,8 +2,8 @@ import { writeFile, readFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { existsSync } from "node:fs";
-import type { AppConfig } from "../models/config";
-import { error, success } from "./colors";
+import type { AppConfig } from "../types/config";
+import { error, success } from "../utils/colors";
 
 const CONFIG_DIR = join(homedir(), ".mr-rocket");
 const CONFIG_FILE = join(CONFIG_DIR, "config.json");
@@ -23,7 +23,7 @@ export class ConfigManager {
     try {
       const content = await readFile(CONFIG_FILE, "utf-8");
       const parsed = JSON.parse(content) as AppConfig;
-      const { DEFAULT_CONFIG } = await import("../models/config.js");
+      const { DEFAULT_CONFIG } = await import("../types/config.js");
       const merged = this.mergeConfig(parsed, DEFAULT_CONFIG);
       this.config = merged;
       this.validateConfig(this.config);
@@ -107,7 +107,7 @@ export class ConfigManager {
   }
 
   private async createDefaultConfig(): Promise<void> {
-    const { DEFAULT_CONFIG } = await import("../models/config.js");
+    const { DEFAULT_CONFIG } = await import("../types/config.js");
 
     if (!existsSync(CONFIG_DIR)) {
       await mkdir(CONFIG_DIR, { recursive: true });

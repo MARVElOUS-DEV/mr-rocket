@@ -12,7 +12,7 @@ import { BugAttach } from "./tui/components/bug-attach.js";
 import { HistoryList } from "./tui/components/history-list.js";
 import { WikiSearch } from "./tui/components/wiki-search.js";
 import { Toast } from "./tui/components/toast.js";
-import { type AppState } from "./tui/types.js";
+import type { AppState } from "./types/tui.js";
 
 function App() {
   const store = getStore();

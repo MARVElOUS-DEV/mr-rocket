@@ -1,5 +1,5 @@
 import type { ParsedArgs } from "../utils/cli-parser";
-import type { CommandOutput } from "../models/command-output";
+import type { CommandOutput } from "../types/command-output";
 
 export interface Command {
   name: string;

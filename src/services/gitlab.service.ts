@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 import { logger } from "../core/logger.js";
-import type { GitLabTLSConfig } from "../models/config.js";
+import type { GitLabTLSConfig } from "../types/config.js";
 import type {
   CreateMRParams,
   MRFilter,
@@ -11,7 +11,7 @@ import type {
   MergeRequest,
   Issue,
   ProjectUpload,
-} from "../models/gitlab.js";
+} from "../types/gitlab.js";
 
 let GitlabModule: typeof import("@gitbeaker/rest");
 

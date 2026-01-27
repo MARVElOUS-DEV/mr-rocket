@@ -1,6 +1,6 @@
 import type { Command, CommandContext } from "./command.interface";
 import type { ParsedArgs } from "../utils/cli-parser";
-import type { CommandOutput } from "../models/command-output";
+import type { CommandOutput } from "../types/command-output";
 import { historyManager } from "../core/history-manager";
 
 export abstract class BaseCommand implements Command {

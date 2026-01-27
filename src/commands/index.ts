@@ -1,6 +1,6 @@
 import type { Command } from "./command.interface";
 import type { ParsedArgs } from "../utils/cli-parser";
-import { error, success } from "../core/colors";
+import { error, success } from "../utils/colors";
 
 class CommandRegistry {
   private commands: Map<string, Command> = new Map();

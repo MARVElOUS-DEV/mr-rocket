@@ -1,6 +1,6 @@
 import { BaseCommand } from "../../base-command";
 import type { ParsedArgs } from "../../../utils/cli-parser";
-import type { CommandOutput } from "../../../models/command-output";
+import type { CommandOutput } from "../../../types/command-output";
 import { GitLabService } from "../../../services/gitlab.service";
 import { configManager } from "../../../core/config-manager";
 import { cliParser } from "../../../utils/cli-parser";

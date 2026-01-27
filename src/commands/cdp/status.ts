@@ -1,6 +1,6 @@
 import { BaseCommand } from "../base-command.js";
 import type { ParsedArgs } from "../../utils/cli-parser.js";
-import type { CommandOutput } from "../../models/command-output.js";
+import type { CommandOutput } from "../../types/command-output.js";
 import { CDPService } from "../../services/cdp.service.js";
 import { configManager } from "../../core/config-manager.js";
 

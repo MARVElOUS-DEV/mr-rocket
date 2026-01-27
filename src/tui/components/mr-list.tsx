@@ -6,7 +6,7 @@ import { getGitLabService } from "../client.js";
 import { TUIContext } from "../context.js";
 import { openUrl } from "../../utils/open-url.js";
 import { showToast } from "./toast.js";
-import type { MergeRequest } from "../../models/gitlab.js";
+import type { MergeRequest } from "../../types/gitlab.js";
 
 export function MRList() {
   const store = getStore();

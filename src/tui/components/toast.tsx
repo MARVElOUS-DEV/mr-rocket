@@ -1,7 +1,7 @@
 import { TextAttributes } from "@opentui/core";
 import { useEffect, useState } from "react";
 import { getStore } from "../store.js";
-import type { ToastType } from "../types.js";
+import type { ToastType } from "../../types/tui.js";
 
 const TOAST_COLORS: Record<ToastType, string> = {
   info: "cyan",

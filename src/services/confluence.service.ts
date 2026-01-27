@@ -2,8 +2,8 @@ import { logger } from "../core/logger.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { Agent as HttpsAgent } from "node:https";
 import { resolve } from "node:path";
-import type { ConfluencePage, ConfluenceSearchResult } from "../models/confluence.ts";
-import type { ConfluenceTLSConfig } from "../models/config.ts";
+import type { ConfluencePage, ConfluenceSearchResult } from "../types/confluence.ts";
+import type { ConfluenceTLSConfig } from "../types/config.ts";
 import { ConfluenceClient } from "confluence.js";
 
 interface ConfluenceSearchOptions {

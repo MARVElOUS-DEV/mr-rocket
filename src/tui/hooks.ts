@@ -1,4 +1,5 @@
-import { appReducer, type AppState, type AppAction } from "./types.js";
+import { appReducer } from "./app-reducer.js";
+import type { AppAction, AppState } from "../types/tui.js";
 
 export function useTUI() {
   let state: AppState = {
