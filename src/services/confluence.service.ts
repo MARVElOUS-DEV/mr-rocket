@@ -27,7 +27,7 @@ interface SearchContentResult {
     content?: {
       id?: string;
       title?: string;
-      _links?: { self?: string };
+      _links?: { self?: string; webui?: string };
       space?: { key?: string };
       version?: { when?: string };
     };
@@ -145,9 +145,10 @@ export class ConfluenceService {
         id: item.content?.id ?? "",
         title: item.content?.title ?? "",
         excerpt: this.stripHtml(item.excerpt ?? ""),
-        url: item.content?._links?.self,
+        url: this.buildWebUrl(item.content?._links?.webui ?? item.content?._links?.self),
         lastModified: item.lastModified,
         friendlyLastModified: item.friendlyLastModified,
+        spaceKey: item.content?.space?.key,
         scopeTitle: item.resultGlobalContainer?.title,
       }))
       .filter((item) => item.id.length > 0 && item.title.length > 0);

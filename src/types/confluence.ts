@@ -4,6 +4,9 @@ export interface ConfluenceSearchResult {
   excerpt: string;
   url?: string;
   lastModified?: string;
+  friendlyLastModified?: string;
+  spaceKey?: string;
+  scopeTitle?: string;
 }
 
 export interface ConfluencePage {

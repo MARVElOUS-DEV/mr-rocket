@@ -1,19 +1,67 @@
 import type { TextareaRenderable } from "@opentui/core";
 import { TextAttributes } from "@opentui/core";
-import { useKeyboard } from "@opentui/react";
-import { useMemo, useRef, useState } from "react";
+import { useKeyboard, useTerminalDimensions } from "@opentui/react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ConfluenceSearchResult } from "../../types/confluence.js";
 import { configManager } from "../../core/config-manager.js";
 import { ValidationError, ValidationHelper } from "../../utils/validation.js";
 import { getConfluenceService } from "../client.js";
 import { getStore } from "../store.js";
 import { singleLineKeyBindings } from "../../utils/textarea-helper";
+import { openUrl } from "../../utils/open-url.js";
+import { showToast } from "./toast.js";
 
 type SearchState = "idle" | "loading" | "success" | "error";
+
+function truncate(value: string, maxLen: number): string {
+  if (maxLen <= 0) {
+    return "";
+  }
+  if (value.length <= maxLen) {
+    return value;
+  }
+  if (maxLen === 1) {
+    return "…";
+  }
+  return `${value.slice(0, maxLen - 1)}…`;
+}
+
+function padEnd(value: string, length: number): string {
+  if (value.length >= length) {
+    return value;
+  }
+  return `${value}${" ".repeat(length - value.length)}`;
+}
+
+function padStart(value: string, length: number): string {
+  if (value.length >= length) {
+    return value;
+  }
+  return `${" ".repeat(length - value.length)}${value}`;
+}
+
+function formatShortDate(value?: string): string {
+  if (!value) {
+    return "";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value.trim().slice(0, 10);
+  }
+  return date.toISOString().slice(0, 10);
+}
+
+function clampInt(value: number, min: number, max: number): number {
+  if (max < min) {
+    return min;
+  }
+  return Math.min(max, Math.max(min, value));
+}
 
 export function WikiSearch() {
   const store = getStore();
   const config = useMemo(() => configManager.getConfig(), []);
+  const { width } = useTerminalDimensions();
 
   const queryRef = useRef<TextareaRenderable>(null);
   const spaceKeyRef = useRef<TextareaRenderable>(null);
@@ -23,8 +71,115 @@ export function WikiSearch() {
   const [message, setMessage] = useState<string | null>(null);
   const [results, setResults] = useState<ConfluenceSearchResult[]>([]);
   const [focusIndex, setFocusIndex] = useState(0);
+  const [selectedIndex, setSelectedIndex] = useState(0);
 
-  const focusCount = 3;
+  const focusCount = 4;
+
+  const selectedResult = useMemo(
+    () =>
+      results.length > 0
+        ? results[Math.min(selectedIndex, results.length - 1)]
+        : undefined,
+    [results, selectedIndex],
+  );
+
+  useEffect(() => {
+    if (results.length === 0) {
+      setSelectedIndex(0);
+      return;
+    }
+    setSelectedIndex((prev) => Math.min(prev, results.length - 1));
+  }, [results.length]);
+
+  const listLayout = useMemo(() => {
+    const available = Math.max(24, width - 6);
+
+    const minTitleWidth = 15;
+    const minSpaceWidth = 10;
+    const minUpdatedWidth = 10;
+
+    if (available >= 70) {
+      const contentWidth = available - 4;
+      const spaceRatio = 0.2;
+      const updatedRatio = 0.2;
+
+      const maxSpaceWidth = contentWidth - minTitleWidth - minUpdatedWidth;
+      const spaceWidth = clampInt(
+        Math.round(contentWidth * spaceRatio),
+        minSpaceWidth,
+        maxSpaceWidth,
+      );
+
+      const maxUpdatedWidth = contentWidth - minTitleWidth - spaceWidth;
+      const updatedWidth = clampInt(
+        Math.round(contentWidth * updatedRatio),
+        minUpdatedWidth,
+        maxUpdatedWidth,
+      );
+
+      const titleWidth = contentWidth - spaceWidth - updatedWidth;
+      return { mode: "full" as const, titleWidth, spaceWidth, updatedWidth };
+    }
+
+    if (available >= 44) {
+      const contentWidth = available - 2;
+      const updatedRatio = 0.25;
+      const updatedWidth = clampInt(
+        Math.round(contentWidth * updatedRatio),
+        minUpdatedWidth,
+        contentWidth - minTitleWidth,
+      );
+      const titleWidth = contentWidth - updatedWidth;
+      return { mode: "compact" as const, titleWidth, updatedWidth };
+    }
+    return { mode: "title" as const, titleWidth: available };
+  }, [width]);
+
+  const headerRow = useMemo(() => {
+    if (listLayout.mode === "full") {
+      return (
+        `${padEnd("Title", listLayout.titleWidth)}` +
+        `  ${padEnd("Space", listLayout.spaceWidth)}` +
+        `  ${padStart("Updated", listLayout.updatedWidth)}`
+      );
+    }
+    if (listLayout.mode === "compact") {
+      return (
+        `${padEnd("Title", listLayout.titleWidth)}` +
+        `  ${padStart("Updated", listLayout.updatedWidth)}`
+      );
+    }
+    return "Title";
+  }, [listLayout]);
+
+  const selectOptions = useMemo(
+    () =>
+      results.map((result) => {
+        const space = (result.scopeTitle || "").trim();
+        const updated = (
+          result.friendlyLastModified ||
+          formatShortDate(result.lastModified) ||
+          ""
+        ).trim();
+
+        let name: string;
+        if (listLayout.mode === "full") {
+          name =
+            `${padEnd(truncate(result.title, listLayout.titleWidth), listLayout.titleWidth)}` +
+            `  ${padEnd(truncate(space, listLayout.spaceWidth), listLayout.spaceWidth)}` +
+            `  ${padEnd(truncate(updated, listLayout.updatedWidth), listLayout.updatedWidth)}`;
+        } else if (listLayout.mode === "compact") {
+          name =
+            `${padEnd(truncate(result.title, listLayout.titleWidth), listLayout.titleWidth)}` +
+            `  ${padEnd(truncate(updated, listLayout.updatedWidth), listLayout.updatedWidth)}`;
+        } else {
+          name = truncate(result.title, listLayout.titleWidth);
+        }
+
+        return { name, description: "", value: result.id };
+      }),
+    [listLayout, results],
+  );
 
   const runSearch = async (): Promise<void> => {
     if (status === "loading") {
@@ -68,8 +223,12 @@ export function WikiSearch() {
       });
 
       setResults(data);
+      setSelectedIndex(0);
       setStatus("success");
       setMessage(`Found ${data.length} pages`);
+      if (data.length > 0) {
+        setFocusIndex(3);
+      }
     } catch (error) {
       setStatus("error");
       if (error instanceof Error) {
@@ -80,6 +239,23 @@ export function WikiSearch() {
     }
   };
 
+  const openSelected = (): void => {
+    const url = selectedResult?.url?.trim();
+    if (!url) {
+      showToast("No URL available for this page", "warning");
+      return;
+    }
+    const result = openUrl(url);
+    if (!result.ok) {
+      showToast(
+        `Failed to open URL: ${result.error ?? "unknown error"}`,
+        "error",
+      );
+      return;
+    }
+    showToast("Opened page in browser", "success", 1500);
+  };
+
   useKeyboard((key) => {
     if (key.name === "escape") {
       store.dispatch({ type: "NAVIGATE", screen: "dashboard" });
@@ -88,7 +264,11 @@ export function WikiSearch() {
       setFocusIndex(
         (current) => (current + direction + focusCount) % focusCount,
       );
-    } else if (key.name === "return") {
+    } else if (key.name === "enter" || key.name === "return") {
+      if (focusIndex === 3) {
+        openSelected();
+        return;
+      }
       void runSearch();
     }
   });
@@ -97,7 +277,7 @@ export function WikiSearch() {
     <box flexDirection="column" flexGrow={1} gap={1}>
       <text attributes={TextAttributes.BOLD}>Wiki Search</text>
       <text attributes={TextAttributes.DIM}>
-        Enter search · Tab move · Esc back
+        Enter search/open · Tab move · Esc back width: {width}
       </text>
 
       {message ? (
@@ -144,7 +324,21 @@ export function WikiSearch() {
         </box>
       </box>
 
-      <box flexDirection="column" flexGrow={1} paddingTop={1}>
+      <box
+        flexDirection="column"
+        flexGrow={1}
+        borderStyle="single"
+        borderColor={focusIndex === 3 ? "cyan" : "blue"}
+        paddingLeft={1}
+        paddingRight={1}
+        paddingTop={1}
+        paddingBottom={1}
+        gap={1}
+      >
+        <text attributes={TextAttributes.BOLD}>
+          Results {results.length > 0 ? `(${results.length})` : ""}
+        </text>
+
         {status === "loading" ? (
           <text attributes={TextAttributes.DIM}>Searching...</text>
         ) : results.length === 0 ? (
@@ -154,22 +348,28 @@ export function WikiSearch() {
               : "Enter a query to search."}
           </text>
         ) : (
-          results.map((result) => (
-            <box key={result.id} flexDirection="column" paddingBottom={1}>
-              <text>{result.title}</text>
-              {result.url ? (
-                <text attributes={TextAttributes.DIM}>{result.url}</text>
-              ) : null}
-              {result.excerpt ? (
-                <text attributes={TextAttributes.DIM}>{result.excerpt}</text>
-              ) : null}
+          <>
+            <text attributes={TextAttributes.DIM}>{headerRow}</text>
+            <box flexGrow={1}>
+              <select
+                options={selectOptions}
+                selectedIndex={selectedIndex}
+                onChange={(index) => setSelectedIndex(index)}
+                focused={focusIndex === 3}
+                showScrollIndicator
+                wrapSelection
+                showDescription={false}
+                style={{ flexGrow: 1, width: "100%" }}
+              />
             </box>
-          ))
+          </>
         )}
       </box>
 
       <box paddingTop={1}>
-        <text attributes={TextAttributes.DIM}>Esc back</text>
+        <text attributes={TextAttributes.DIM}>
+          Enter open · ↑/↓ select · Tab focus · Esc back
+        </text>
       </box>
     </box>
   );
