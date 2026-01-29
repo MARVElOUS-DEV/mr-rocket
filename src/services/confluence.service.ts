@@ -2,8 +2,18 @@ import { logger } from "../core/logger.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { Agent as HttpsAgent } from "node:https";
 import { resolve } from "node:path";
-import type { ConfluencePage, ConfluenceSearchResult } from "../types/confluence.ts";
-import type { ConfluenceTLSConfig } from "../types/config.ts";
+import type {
+  ConfluencePage,
+  ConfluenceSearchResult,
+} from "../types/confluence.ts";
+import type { CDPConfig, ConfluenceTLSConfig } from "../types/config.ts";
+import { getCdpCookieValueFromAuthFile } from "../utils/cdp-auth";
+import axios from "axios";
+import type {
+  AxiosAdapter,
+  AxiosResponse,
+  InternalAxiosRequestConfig,
+} from "axios";
 import { ConfluenceClient } from "confluence.js";
 
 interface ConfluenceSearchOptions {
@@ -17,11 +27,14 @@ interface SearchContentResult {
     content?: {
       id?: string;
       title?: string;
-      _links?: { webui?: string };
+      _links?: { self?: string };
       space?: { key?: string };
       version?: { when?: string };
     };
     excerpt?: string;
+    resultGlobalContainer?: { title?: string };
+    friendlyLastModified: string;
+    lastModified: string;
   }>;
   start?: number;
   limit?: number;
@@ -45,22 +58,43 @@ export class ConfluenceService {
   constructor(
     private host: string,
     private token: string,
-    private tls: ConfluenceTLSConfig | undefined = undefined
+    private tls: ConfluenceTLSConfig | undefined = undefined,
+    private apiPrefix: string | undefined = undefined,
+    private cdp: CDPConfig | undefined = undefined,
   ) {
     this.applyTlsConfig(this.tls);
     const tlsOptions = this.buildTlsOptions(this.tls);
+    const resolvedApiPrefix = this.apiPrefix?.trim()
+      ? this.apiPrefix.trim()
+      : undefined;
+
+    const requestDebugEnabled =
+      process.env.MR_ROCKET_CONFLUENCE_DEBUG === "1" ||
+      process.env.MR_ROCKET_CONFLUENCE_DEBUG === "true";
+
+    logger.debug("Confluence client config", {
+      host: this.host,
+      apiPrefix: resolvedApiPrefix,
+    });
+
+    const adapter = this.createAxiosAdapter({ debug: requestDebugEnabled });
+
     this.client = new ConfluenceClient({
       host: this.host,
+      ...(resolvedApiPrefix ? { apiPrefix: resolvedApiPrefix } : {}),
       authentication: {
         personalAccessToken: this.token,
       },
-      ...(tlsOptions ? { baseRequestConfig: tlsOptions } : {}),
+      baseRequestConfig: {
+        ...(tlsOptions ?? {}),
+        adapter,
+      },
     });
   }
 
   async searchPages(
     query: string,
-    options: ConfluenceSearchOptions = {}
+    options: ConfluenceSearchOptions = {},
   ): Promise<ConfluenceSearchResult[]> {
     logger.debug("Searching Confluence pages", { query, options });
     const cql = this.buildCql(query, options.spaceKey);
@@ -111,8 +145,10 @@ export class ConfluenceService {
         id: item.content?.id ?? "",
         title: item.content?.title ?? "",
         excerpt: this.stripHtml(item.excerpt ?? ""),
-        url: this.buildWebUrl(item.content?._links?.webui),
-        lastModified: item.content?.version?.when,
+        url: item.content?._links?.self,
+        lastModified: item.lastModified,
+        friendlyLastModified: item.friendlyLastModified,
+        scopeTitle: item.resultGlobalContainer?.title,
       }))
       .filter((item) => item.id.length > 0 && item.title.length > 0);
   }
@@ -194,7 +230,7 @@ export class ConfluenceService {
   }
 
   private escapeCql(value: string): string {
-    return value.replace(/\\/g, "\\\\").replace(/"/g, "\\\"");
+    return value.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
   }
 
   private buildWebUrl(path?: string): string | undefined {
@@ -212,7 +248,9 @@ export class ConfluenceService {
     return value.replace(/<[^>]+>/g, "").trim();
   }
 
-  private buildTlsOptions(tls?: ConfluenceTLSConfig): { httpsAgent: HttpsAgent } | undefined {
+  private buildTlsOptions(
+    tls?: ConfluenceTLSConfig,
+  ): { httpsAgent: HttpsAgent } | undefined {
     const rejectUnauthorized = tls?.rejectUnauthorized ?? true;
     const caFile = tls?.caFile?.trim();
 
@@ -222,10 +260,13 @@ export class ConfluenceService {
         ca = readFileSync(resolve(caFile), "utf-8");
       } catch (err) {
         const error = err instanceof Error ? err : new Error(String(err));
-        logger.warn("Failed to read Confluence CA file; continuing without it", {
-          caFile,
-          error: error.message,
-        });
+        logger.warn(
+          "Failed to read Confluence CA file; continuing without it",
+          {
+            caFile,
+            error: error.message,
+          },
+        );
       }
     }
 
@@ -302,5 +343,165 @@ export class ConfluenceService {
     }
 
     return summary;
+  }
+
+  private createAxiosAdapter(options: { debug: boolean }): AxiosAdapter {
+    return async (
+      config: InternalAxiosRequestConfig,
+    ): Promise<AxiosResponse> => {
+      await this.injectTokenCookie(config);
+
+      const startTime = Date.now();
+      const url = this.safeGetUri(config);
+
+      if (options.debug) {
+        logger.debug("Confluence HTTP request", {
+          method: config.method,
+          url,
+          baseURL: config.baseURL,
+          path: config.url,
+          params: config.params,
+          headers: this.redactHeaders(this.normalizeHeaders(config.headers)),
+        });
+      }
+
+      const adapter = axios.getAdapter(axios.defaults.adapter);
+      try {
+        const response = await adapter(config);
+        if (options.debug) {
+          logger.debug("Confluence HTTP response", {
+            method: config.method,
+            url,
+            status: response.status,
+            statusText: response.statusText,
+            durationMs: Date.now() - startTime,
+            headers: this.redactHeaders(
+              this.normalizeHeaders(response.headers),
+            ),
+            sampleBody:
+              typeof response.data === "string"
+                ? response.data.slice(0, 240)
+                : undefined,
+          });
+        }
+        return response;
+      } catch (err) {
+        if (options.debug) {
+          logger.debug("Confluence HTTP error", {
+            method: config.method,
+            url,
+            durationMs: Date.now() - startTime,
+            error: this.describeError(err),
+          });
+        }
+        throw err;
+      }
+    };
+  }
+
+  private safeGetUri(config: InternalAxiosRequestConfig): string | undefined {
+    try {
+      return axios.getUri(config);
+    } catch {
+      return undefined;
+    }
+  }
+
+  private normalizeHeaders(headers: unknown): Record<string, unknown> {
+    if (!headers) {
+      return {};
+    }
+
+    const anyHeaders = headers as any;
+    if (typeof anyHeaders?.toJSON === "function") {
+      return anyHeaders.toJSON() as Record<string, unknown>;
+    }
+
+    if (typeof headers === "object") {
+      return headers as Record<string, unknown>;
+    }
+
+    return { value: String(headers) };
+  }
+
+  private redactHeaders(
+    headers: Record<string, unknown>,
+  ): Record<string, unknown> {
+    const out: Record<string, unknown> = {};
+
+    for (const [rawKey, rawValue] of Object.entries(headers)) {
+      const key = rawKey.toLowerCase();
+      if (
+        key === "authorization" ||
+        key === "cookie" ||
+        key === "set-cookie" ||
+        key.endsWith("-token") ||
+        key.includes("secret")
+      ) {
+        out[rawKey] = this.redactValue(rawValue);
+        continue;
+      }
+      out[rawKey] = rawValue;
+    }
+
+    return out;
+  }
+
+  private redactValue(value: unknown): string {
+    const str = typeof value === "string" ? value : JSON.stringify(value);
+    if (str.startsWith("Bearer ")) {
+      const token = str.slice("Bearer ".length);
+      const tail = token.length > 6 ? token.slice(-4) : "";
+      return `Bearer ***REDACTED***${tail ? `(${tail})` : ""}`;
+    }
+    const tail = str.length > 8 ? str.slice(-4) : "";
+    return `***REDACTED***${tail ? `(${tail})` : ""}`;
+  }
+
+  private async injectTokenCookie(
+    config: InternalAxiosRequestConfig,
+  ): Promise<void> {
+    if (!this.cdp) {
+      return;
+    }
+
+    const sid = await getCdpCookieValueFromAuthFile("sid", {
+      authFilePath: this.cdp.authFile,
+      host: this.cdp.host,
+    });
+    if (!sid) {
+      return;
+    }
+
+    const jsid = await getCdpCookieValueFromAuthFile("JSESSIONID", {
+      authFilePath: this.cdp.authFile,
+      host: this.host,
+    });
+    if (!jsid) {
+      return;
+    }
+
+    const cookiePair = `cestcToken=${sid};JSESSIONID=${jsid}`;
+
+    const headersAny = config.headers as any;
+    const existing: unknown =
+      typeof headersAny?.get === "function"
+        ? (headersAny.get("Cookie") ?? headersAny.get("cookie"))
+        : (headersAny?.Cookie ?? headersAny?.cookie);
+
+    const existingStr = typeof existing === "string" ? existing.trim() : "";
+    const merged =
+      existingStr.length > 0 ? `${existingStr}; ${cookiePair}` : cookiePair;
+
+    if (typeof headersAny?.set === "function") {
+      headersAny.set("Cookie", merged);
+    } else {
+      config.headers = {
+        ...(typeof config.headers === "object" && config.headers
+          ? config.headers
+          : {}),
+        Cookie: merged,
+      } as any;
+    }
   }
 }

@@ -30,7 +30,9 @@ export class WikiReadCommand extends BaseCommand {
     const confluence = new ConfluenceService(
       config.confluence.host,
       config.confluence.token,
-      config.confluence.tls
+      config.confluence.tls,
+      config.confluence.apiPrefix,
+      config.cdp,
     );
     logger.debug("Executing wiki read", { title, spaceKey, host: config.confluence.host });
     const page = await confluence.readPage(title, spaceKey);

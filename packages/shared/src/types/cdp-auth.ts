@@ -1,3 +1,13 @@
+export type CDPCookieSameSite =
+  | "no_restriction"
+  | "lax"
+  | "strict"
+  | "unspecified";
+
+export type CDPCookiePriority = "low" | "medium" | "high";
+
+export type CDPCookiePartitionKey = Record<string, unknown>;
+
 export interface CDPCookie {
   name: string;
   value: string;
@@ -6,14 +16,32 @@ export interface CDPCookie {
   secure: boolean;
   httpOnly: boolean;
   expirationDate?: number;
+  sameSite?: CDPCookieSameSite;
+  hostOnly?: boolean;
+  session?: boolean;
+  storeId?: string;
+  sameParty?: boolean;
+  priority?: CDPCookiePriority;
+  partitionKey?: CDPCookiePartitionKey;
 }
 
-export interface CDPAuthData {
+export interface CDPSiteAuthData {
   timestamp: number;
   domain: string;
   cookies: CDPCookie[];
   syncedAt: string;
 }
+
+export interface CDPAuthDataV1 extends CDPSiteAuthData {
+  version?: 1;
+}
+
+export interface CDPAuthDataV2 {
+  version: 2;
+  sites: Record<string, CDPSiteAuthData>;
+}
+
+export type CDPAuthData = CDPAuthDataV1 | CDPAuthDataV2;
 
 export interface CDPSyncMessage {
   type: "SYNC_COOKIES";

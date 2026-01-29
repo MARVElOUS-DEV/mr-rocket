@@ -2,6 +2,7 @@ declare module "confluence.js" {
   export interface ConfluenceClientOptions {
     host: string;
     baseRequestConfig?: Record<string, unknown>;
+    apiPrefix?: string;
     authentication?: {
       personalAccessToken: string;
     };

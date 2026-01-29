@@ -4,13 +4,13 @@ const CONFIG_KEY = "mrrocket_config";
 const NATIVE_HOST = "com.mrrocket.auth";
 
 interface Config {
-  cdpDomain: string;
+  cdpDomains: string[];
   syncInterval: number;
   enabled: boolean;
 }
 
 const DEFAULT_CONFIG: Config = {
-  cdpDomain: "your-cdp-domain.com",
+  cdpDomains: ["your-cdp-domain.com"],
   syncInterval: 60 * 60 * 1000, // 1 hour
   enabled: true,
 };
@@ -26,9 +26,31 @@ export default defineBackground(() => {
     .get(CONFIG_KEY)
     .then((stored) => {
       if (stored[CONFIG_KEY]) {
-        config = { ...DEFAULT_CONFIG, ...stored[CONFIG_KEY] };
+        const storedConfig = stored[CONFIG_KEY] as Record<string, unknown>;
+        const enabled =
+          typeof storedConfig.enabled === "boolean"
+            ? storedConfig.enabled
+            : DEFAULT_CONFIG.enabled;
+        const syncInterval =
+          typeof storedConfig.syncInterval === "number"
+            ? storedConfig.syncInterval
+            : DEFAULT_CONFIG.syncInterval;
+
+        const rawDomains =
+          Array.isArray(storedConfig.cdpDomains)
+            ? storedConfig.cdpDomains
+            : typeof storedConfig.cdpDomain === "string"
+              ? [storedConfig.cdpDomain]
+              : DEFAULT_CONFIG.cdpDomains;
+
+        config = {
+          ...DEFAULT_CONFIG,
+          enabled,
+          syncInterval,
+          cdpDomains: normalizeDomainList(rawDomains),
+        };
       }
-      console.log("🚀 ~ read config:", config)
+      console.log("[mr-rocket/auth] loaded config:", config);
       startCookieMonitor();
     })
     .catch((error) => {
@@ -36,6 +58,38 @@ export default defineBackground(() => {
       startCookieMonitor();
     });
 });
+
+function sanitizeDomain(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+
+  try {
+    const url = trimmed.includes("://")
+      ? new URL(trimmed)
+      : new URL(`https://${trimmed}`);
+    const hostname = url.hostname.trim().toLowerCase();
+    return hostname.length > 0 ? hostname : null;
+  } catch {
+    const fallback = trimmed.split("/")[0] ?? "";
+    const normalized = fallback.trim().replace(/^\./, "").toLowerCase();
+    return normalized.length > 0 ? normalized : null;
+  }
+}
+
+function normalizeDomainList(raw: unknown): string[] {
+  const list = Array.isArray(raw) ? raw : [];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of list) {
+    if (typeof item !== "string") continue;
+    const domain = sanitizeDomain(item);
+    if (!domain) continue;
+    if (seen.has(domain)) continue;
+    seen.add(domain);
+    out.push(domain);
+  }
+  return out;
+}
 
 function startCookieMonitor() {
   chrome.cookies.onChanged.addListener(handleCookieChange);
@@ -52,51 +106,71 @@ function restartInterval() {
 
 function handleCookieChange(changeInfo: chrome.cookies.CookieChangeInfo) {
   if (!config.enabled) return;
-  
-  const cookieDomain = changeInfo.cookie.domain.startsWith(".") 
-    ? changeInfo.cookie.domain.substring(1) 
-    : changeInfo.cookie.domain;
-  const targetDomain = config.cdpDomain.startsWith(".") 
-    ? config.cdpDomain.substring(1) 
-    : config.cdpDomain;
 
-  if (cookieDomain === targetDomain || cookieDomain.endsWith("." + targetDomain)) {
+  const cookieDomain = sanitizeDomain(changeInfo.cookie.domain) || "";
+  const targets = normalizeDomainList(config.cdpDomains);
+  const affected = targets.filter(
+    (target) => target === cookieDomain || target.endsWith(`.${cookieDomain}`),
+  );
+
+  if (affected.length > 0) {
     console.log(
-      `Cookie ${changeInfo.removed ? "removed" : "changed"}: ${changeInfo.cookie.name}`
+      `[mr-rocket/auth] cookie ${changeInfo.removed ? "removed" : "changed"}: ${changeInfo.cookie.name}`,
     );
-    syncCookies();
+    syncCookies(affected);
   }
 }
 
-async function syncCookies() {
+async function syncCookies(domainsOverride?: string[]) {
   if (!config.enabled) return;
 
   try {
-    const cookies = await chrome.cookies.getAll({ url: `https://${config.cdpDomain}` });
-
-    if (cookies.length === 0) {
+    const domains = normalizeDomainList(domainsOverride ?? config.cdpDomains);
+    if (domains.length === 0) {
       updateBadge("!", "#FFA500");
       return;
     }
 
-    const message: CDPSyncMessage = {
-      type: "SYNC_COOKIES",
-      timestamp: Date.now(),
-      domain: config.cdpDomain,
-      cookies: cookies.map(
-        (c): CDPCookie => ({
-          name: c.name,
-          value: c.value,
-          domain: c.domain,
-          path: c.path,
-          secure: c.secure,
-          httpOnly: c.httpOnly,
-          expirationDate: c.expirationDate,
-        })
-      ),
-    };
+    let sent = 0;
+    for (const domain of domains) {
+      const cookies = await chrome.cookies.getAll({ url: `https://${domain}` });
+      if (cookies.length === 0) {
+        continue;
+      }
 
-    sendToNativeHost(message);
+      const message: CDPSyncMessage = {
+        type: "SYNC_COOKIES",
+        timestamp: Date.now(),
+        domain,
+        cookies: cookies.map(
+          (c): CDPCookie => ({
+            name: c.name,
+            value: c.value,
+            domain: c.domain,
+            path: c.path,
+            secure: c.secure,
+            httpOnly: c.httpOnly,
+            expirationDate: c.expirationDate,
+            sameSite: c.sameSite,
+            hostOnly: c.hostOnly,
+            session: c.session,
+            storeId: c.storeId,
+            priority: (c as any).priority,
+            sameParty: (c as any).sameParty,
+            partitionKey: (c as any).partitionKey,
+          }),
+        ),
+      };
+
+      sendToNativeHost(message);
+      sent += 1;
+    }
+
+    if (sent === 0) {
+      updateBadge("!", "#FFA500");
+      return;
+    }
+
     lastSyncTime = new Date();
     updateBadge("✓", "#4CAF50");
   } catch (error) {
@@ -151,7 +225,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     case "GET_STATUS":
       sendResponse({
         enabled: config.enabled,
-        domain: config.cdpDomain,
+        domains: config.cdpDomains,
         lastSync: lastSyncTime?.toISOString(),
         connected: port !== null,
       });
@@ -159,7 +233,29 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
     case "UPDATE_CONFIG":
       const oldInterval = config.syncInterval;
-      config = { ...config, ...message.config };
+
+      const incoming =
+        message && typeof message === "object" ? (message.config as any) : {};
+      const nextEnabled =
+        typeof incoming?.enabled === "boolean" ? incoming.enabled : config.enabled;
+      const nextSyncInterval =
+        typeof incoming?.syncInterval === "number"
+          ? incoming.syncInterval
+          : config.syncInterval;
+
+      const nextDomainsRaw = Array.isArray(incoming?.cdpDomains)
+        ? incoming.cdpDomains
+        : typeof incoming?.cdpDomain === "string"
+          ? [incoming.cdpDomain]
+          : config.cdpDomains;
+
+      config = {
+        ...config,
+        enabled: nextEnabled,
+        syncInterval: nextSyncInterval,
+        cdpDomains: normalizeDomainList(nextDomainsRaw),
+      };
+
       chrome.storage.local.set({ [CONFIG_KEY]: config }).catch((error) => {
         console.error("Failed to save config to storage:", error);
       });

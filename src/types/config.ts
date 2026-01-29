@@ -38,6 +38,8 @@ export interface ConfluenceConfig {
   host: string;
   token: string;
   defaultSpaceKey?: string;
+  /** Override Confluence REST API prefix. Examples: "/wiki/rest" (cloud) or "/rest" (server/DC). */
+  apiPrefix?: string;
   tls?: ConfluenceTLSConfig;
 }
 

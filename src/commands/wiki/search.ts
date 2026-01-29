@@ -50,7 +50,9 @@ export class WikiSearchCommand extends BaseCommand {
     const confluence = new ConfluenceService(
       config.confluence.host,
       config.confluence.token,
-      config.confluence.tls
+      config.confluence.tls,
+      config.confluence.apiPrefix,
+      config.cdp,
     );
     logger.debug("Executing wiki search", { query, limit, offset, spaceKey, host: config.confluence.host });
     const results = await confluence.searchPages(query, { limit, offset, spaceKey });

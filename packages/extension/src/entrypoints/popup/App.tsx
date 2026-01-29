@@ -2,14 +2,14 @@ import { useState, useEffect } from "react";
 
 interface Status {
   enabled: boolean;
-  domain: string;
+  domains: string[];
   lastSync: string | null;
   connected: boolean;
 }
 
 export function App() {
   const [status, setStatus] = useState<Status | null>(null);
-  const [domain, setDomain] = useState("");
+  const [domainsText, setDomainsText] = useState("");
 
   useEffect(() => {
     chrome.runtime.sendMessage({ type: "GET_STATUS" }, (response: Status) => {
@@ -19,7 +19,7 @@ export function App() {
         return;
       }
       setStatus(response);
-      setDomain(response.domain);
+      setDomainsText((response.domains ?? []).join(", "));
     });
   }, []);
 
@@ -30,22 +30,30 @@ export function App() {
   };
 
   const handleSave = () => {
-    let cleanDomain = domain.trim();
-    try {
-      if (cleanDomain.includes("://")) {
-        cleanDomain = new URL(cleanDomain).hostname;
-      }
-    } catch (e) {
-      // If URL parsing fails, stick with trimmed domain
-    }
+    const raw = domainsText;
+    const domains = raw
+      .split(/[\s,]+/)
+      .map((d) => d.trim())
+      .filter((d) => d.length > 0)
+      .map((d) => {
+        try {
+          const url = d.includes("://") ? new URL(d) : new URL(`https://${d}`);
+          return url.hostname.trim().toLowerCase();
+        } catch {
+          return d.trim().replace(/^\./, "").split("/")[0]?.toLowerCase() ?? "";
+        }
+      })
+      .filter((d) => d.length > 0);
+
+    const uniqueDomains = Array.from(new Set(domains));
 
     chrome.runtime.sendMessage(
       {
         type: "UPDATE_CONFIG",
-        config: { cdpDomain: cleanDomain },
+        config: { cdpDomains: uniqueDomains },
       },
       () => {
-        setDomain(cleanDomain);
+        setDomainsText(uniqueDomains.join(", "));
         chrome.runtime.sendMessage({ type: "GET_STATUS" }, setStatus);
       }
     );
@@ -82,6 +90,12 @@ export function App() {
             {status.enabled ? "Yes" : "No"}
           </span>
         </div>
+        <div className="status-row">
+          <span>Domains:</span>
+          <span className="text-muted">
+            {(status.domains ?? []).length > 0 ? (status.domains ?? []).join(", ") : "(none)"}
+          </span>
+        </div>
         {status.lastSync && (
           <div className="status-row">
             <span>Last Sync:</span>
@@ -94,12 +108,12 @@ export function App() {
 
       <div className="config-section">
         <label>
-          CDP Domain:
+          CDP Domains (comma or space separated):
           <input
             type="text"
-            value={domain}
-            onChange={(e) => setDomain(e.target.value)}
-            placeholder="your-cdp-domain.com"
+            value={domainsText}
+            onChange={(e) => setDomainsText(e.target.value)}
+            placeholder="cdp-a.example.com, cdp-b.example.com"
           />
         </label>
       </div>
@@ -118,7 +132,7 @@ export function App() {
 
       <div className="help-text">
         <p>
-          Configure the CDP domain above, then log into CDP in your browser.
+          Configure one or more CDP domains above, then log into them in your browser.
           Cookies will sync automatically.
         </p>
       </div>

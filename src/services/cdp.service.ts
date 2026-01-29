@@ -1,13 +1,15 @@
 import { readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
-import { homedir } from "node:os";
+import { resolve } from "node:path";
 import { existsSync } from "node:fs";
-import { createDecipheriv, scryptSync } from "node:crypto";
 import { logger } from "../core/logger.js";
 import type { CDPCookie, CDPAuthData } from "@mr-rocket/shared";
 import type { CDPConfig, CDPTLSConfig } from "../types/config.js";
+import {
+  readCdpAuthData,
+  DEFAULT_CDP_AUTH_FILE_PATH,
+  selectCdpSiteAuthData,
+} from "../utils/cdp-auth";
 
-const CDP_AUTH_FILE = join(homedir(), ".mr-rocket", "cdp-auth.json");
 const MAX_AUTH_AGE_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 export interface BugMetadata {
@@ -44,15 +46,13 @@ export class CDPService {
   private cookies: CDPCookie[] = [];
   private authData: CDPAuthData | null = null;
   private tls?: CDPTLSConfig;
-  private encryptionKey: string;
+  private authFilePath: string;
   private initialized = false;
 
   constructor(config: CDPConfig) {
     this.host = config.host;
     this.tls = config.tls;
-    // Use a combination of user's home directory and a constant to derive the key
-    // In a production app, this should ideally come from a secure keystore
-    this.encryptionKey = `mr-rocket-cdp-${homedir()}`;
+    this.authFilePath = config.authFile?.trim() || DEFAULT_CDP_AUTH_FILE_PATH;
   }
 
   async init(): Promise<void> {
@@ -67,72 +67,40 @@ export class CDPService {
   }
 
   private async loadAuth(): Promise<void> {
-    const authFile = CDP_AUTH_FILE;
-
-    if (!existsSync(authFile)) {
-      throw new Error(
-        `CDP auth file not found at ${authFile}. ` +
-          "Please install the Chrome extension and log into CDP.",
-      );
-    }
-
     try {
-      const content = await readFile(authFile, "utf-8");
-      const wrapper = JSON.parse(content);
-
-      if (
-        !wrapper ||
-        typeof wrapper !== "object" ||
-        typeof wrapper.data !== "string"
-      ) {
-        throw new Error("Invalid cdp-auth.json format");
-      }
-
-      let authData: CDPAuthData;
-      if (wrapper.encrypted) {
-        const decrypted = this.decrypt(wrapper.data);
-        authData = JSON.parse(decrypted) as CDPAuthData;
-      } else {
-        authData = JSON.parse(wrapper.data) as CDPAuthData;
-      }
-
-      if (!authData || typeof authData !== "object" || !authData.cookies) {
+      const authData = await readCdpAuthData({
+        authFilePath: this.authFilePath,
+        required: true,
+      });
+      if (!authData) {
         throw new Error("Invalid CDP auth data structure");
       }
 
-      const authAge = Date.now() - authData.timestamp;
+      const site = selectCdpSiteAuthData(authData, { host: this.host });
+      if (!site) {
+        throw new Error(
+          `No matching CDP auth entry found for host: ${this.host}. ` +
+            "Please open CDP in Chrome to sync cookies.",
+        );
+      }
+
+      const authAge = Date.now() - site.timestamp;
       if (authAge > MAX_AUTH_AGE_MS) {
         logger.warn(
-          "CDP auth is stale (older than 24 hours). Please refresh by visiting CDP in Chrome.",
+          "CDP auth is stale (older than 12 hours). Please refresh by visiting CDP in Chrome.",
         );
       }
 
       this.authData = authData;
-      this.cookies = authData.cookies;
+      this.cookies = site.cookies;
       logger.debug(
-        `Loaded ${this.cookies.length} CDP cookies from ${authData.domain}`,
+        `Loaded ${this.cookies.length} CDP cookies from ${site.domain}`,
       );
     } catch (error) {
       throw new Error(
         `Failed to load CDP auth: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
-  }
-
-  private decrypt(data: string): string {
-    const parts = data.split(":");
-    if (parts.length !== 2) {
-      throw new Error(
-        "Invalid encrypted data format: missing IV or ciphertext",
-      );
-    }
-    const [ivHex, encrypted] = parts;
-    const key = scryptSync(this.encryptionKey, "salt", 32);
-    const iv = Buffer.from(ivHex!, "hex");
-    const decipher = createDecipheriv("aes-256-cbc", key, iv);
-    let decrypted = decipher.update(encrypted!, "hex", "utf8");
-    decrypted += decipher.final("utf8");
-    return decrypted;
   }
 
   private getCookieHeader(): string {
@@ -216,7 +184,7 @@ export class CDPService {
 
   async getAuthStatus(): Promise<CDPAuthStatus> {
     try {
-      if (!existsSync(CDP_AUTH_FILE)) {
+      if (!existsSync(this.authFilePath)) {
         return {
           authenticated: false,
           error:
@@ -224,28 +192,28 @@ export class CDPService {
         };
       }
 
-      const content = await readFile(CDP_AUTH_FILE, "utf-8");
-      const wrapper = JSON.parse(content) as {
-        encrypted: boolean;
-        data: string;
-      };
-
-      let authData: CDPAuthData;
-      if (wrapper.encrypted) {
-        const decrypted = this.decrypt(wrapper.data);
-        authData = JSON.parse(decrypted) as CDPAuthData;
-      } else {
-        authData = JSON.parse(wrapper.data) as CDPAuthData;
+      const authData = await readCdpAuthData({ authFilePath: this.authFilePath });
+      if (!authData) {
+        return { authenticated: false, error: "Invalid CDP auth data structure" };
       }
 
-      const authAge = Date.now() - authData.timestamp;
+      const site = selectCdpSiteAuthData(authData, { host: this.host });
+      if (!site) {
+        return {
+          authenticated: false,
+          error:
+            "No matching CDP auth entry found for configured host. Please open CDP in Chrome to sync cookies.",
+        };
+      }
+
+      const authAge = Date.now() - site.timestamp;
       const isStale = authAge > MAX_AUTH_AGE_MS;
 
       return {
         authenticated: true,
-        domain: authData.domain,
-        cookieCount: authData.cookies.length,
-        syncedAt: authData.syncedAt,
+        domain: site.domain,
+        cookieCount: site.cookies.length,
+        syncedAt: site.syncedAt,
         isStale,
       };
     } catch (error) {

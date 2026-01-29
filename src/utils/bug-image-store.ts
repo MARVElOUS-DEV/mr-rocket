@@ -1,4 +1,5 @@
 import { existsSync, mkdirSync, readdirSync, rmdirSync, statSync, unlinkSync } from "node:fs";
+import type { Dirent } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -50,12 +51,12 @@ export function getNextSequence(existingFiles: string[]): string {
 export function listStoredBugImages(): StoredBugImages[] {
   if (!existsSync(BUG_IMAGES_DIR)) return [];
 
-  const bugs = readdirSync(BUG_IMAGES_DIR, { withFileTypes: true })
+  const bugs = readdirSync(BUG_IMAGES_DIR, { withFileTypes: true, encoding: "utf8" })
     .filter((d) => d.isDirectory())
     .map((d): StoredBugImages => {
       const bugId = d.name;
       const bugDir = join(BUG_IMAGES_DIR, bugId);
-      const images = readdirSync(bugDir, { withFileTypes: true })
+      const images = readdirSync(bugDir, { withFileTypes: true, encoding: "utf8" })
         .filter((e) => e.isFile())
         .map((e): StoredImage => {
           const fullPath = join(bugDir, e.name);
@@ -85,15 +86,15 @@ export function cleanupOutdatedBugImages(retentionDays = 30): {
   let deletedDirs = 0;
   let errors = 0;
 
-  const bugDirs = readdirSync(BUG_IMAGES_DIR, { withFileTypes: true }).filter((d) =>
-    d.isDirectory(),
+  const bugDirs = readdirSync(BUG_IMAGES_DIR, { withFileTypes: true, encoding: "utf8" }).filter(
+    (d) => d.isDirectory(),
   );
 
   for (const dir of bugDirs) {
     const bugDir = join(BUG_IMAGES_DIR, dir.name);
-    let entries: ReturnType<typeof readdirSync>;
+    let entries: Dirent<string>[];
     try {
-      entries = readdirSync(bugDir, { withFileTypes: true });
+      entries = readdirSync(bugDir, { withFileTypes: true, encoding: "utf8" });
     } catch {
       errors += 1;
       continue;

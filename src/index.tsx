@@ -1,7 +1,7 @@
 import { TextAttributes } from "@opentui/core";
 import { createRoot, useKeyboard } from "@opentui/react";
 import { useEffect, useState } from "react";
-import { initializeTUI, createTUIRoot, cleanupTUI, getRenderer } from "./tui/client.js";
+import { initializeTUI, createTUIRoot, cleanupTUI } from "./tui/client.js";
 import { getStore } from "./tui/store.js";
 import { Dashboard } from "./tui/components/dashboard.js";
 import { MRList } from "./tui/components/mr-list.js";
@@ -26,7 +26,12 @@ function App() {
 
   useKeyboard((key) => {
     const input = key.name;
-    if (state.currentScreen === "mr-create" || state.currentScreen === "bug-comment" || state.currentScreen === "bug-attach") {
+    if (
+      state.currentScreen === "mr-create" ||
+      state.currentScreen === "bug-comment" ||
+      state.currentScreen === "bug-attach" ||
+      state.currentScreen === "wiki-search"
+    ) {
       return;
     }
     if (input === "q") {
@@ -73,8 +78,15 @@ function App() {
         return <WikiSearch />;
       default:
         return (
-          <box flexDirection="column" alignItems="center" justifyContent="center" flexGrow={1}>
-            <text attributes={TextAttributes.BOLD}>{state.currentScreen.toUpperCase()}</text>
+          <box
+            flexDirection="column"
+            alignItems="center"
+            justifyContent="center"
+            flexGrow={1}
+          >
+            <text attributes={TextAttributes.BOLD}>
+              {state.currentScreen.toUpperCase()}
+            </text>
             <text attributes={TextAttributes.DIM}>Coming Soon...</text>
             <text attributes={TextAttributes.DIM}>Press [q] to quit</text>
           </box>
@@ -99,7 +111,9 @@ try {
     console.error("\x1b[31mError: GitLab token not configured.\x1b[0m");
     console.error("Please add your token to ~/.mr-rocket/config.json");
     console.log("\n\x1b[36mQuick Guide:\x1b[0m");
-    console.log("1. Go to https://gitlab.com/-/user_settings/personal_access_tokens");
+    console.log(
+      "1. Go to https://your-gitlab.com/-/user_settings/personal_access_tokens",
+    );
     console.log("2. Create a token with 'api' scope");
     console.log("3. Paste the token in ~/.mr-rocket/config.json:");
     console.log('   "gitlab": { "token": "YOUR_TOKEN_HERE" }');

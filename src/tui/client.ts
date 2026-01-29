@@ -93,7 +93,9 @@ export function getConfluenceService(): ConfluenceService {
   confluenceService = new ConfluenceService(
     config.confluence.host,
     config.confluence.token,
-    config.confluence.tls
+    config.confluence.tls,
+    config.confluence.apiPrefix,
+    config.cdp,
   );
   return confluenceService;
 }
