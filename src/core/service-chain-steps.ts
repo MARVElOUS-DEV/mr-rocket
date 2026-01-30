@@ -4,6 +4,7 @@ import type { ServiceChainStep } from "./service-chain.ts";
 import { GitLabService } from "../services/gitlab.service.ts";
 import { SystemService } from "../services/system.service.ts";
 import { ConfluenceService } from "../services/confluence.service.ts";
+import { CDPService } from "../services/cdp.service.ts";
 
 export const withConfig = <T extends { config?: AppConfig }>(
   loadConfig: () => Promise<AppConfig>
@@ -52,6 +53,30 @@ export const withConfluenceService = <
           config.cdp,
         ));
     ctx.confluence = factory(ctx.config);
+    await next();
+  };
+};
+
+export const withCdpService = <T extends { config?: AppConfig; cdp?: CDPService }>(
+  createService?: (config: AppConfig) => CDPService,
+  options?: { required?: boolean }
+): ServiceChainStep<T> => {
+  return async (ctx, next) => {
+    if (!ctx.config) {
+      throw new Error("Missing config for CDP service");
+    }
+
+    if (!ctx.config.cdp) {
+      if (options?.required === false) {
+        ctx.cdp = undefined;
+        await next();
+        return;
+      }
+      throw new Error("CDP is not configured");
+    }
+
+    const factory = createService ?? ((config: AppConfig) => new CDPService(config.cdp!));
+    ctx.cdp = factory(ctx.config);
     await next();
   };
 };

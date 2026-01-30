@@ -72,6 +72,23 @@ export function listStoredBugImages(): StoredBugImages[] {
   return bugs;
 }
 
+export function listBugImagePaths(bugId: string): string[] {
+  assertSafePathSegment(bugId, "Bug ID");
+  const dir = join(BUG_IMAGES_DIR, bugId.trim());
+  if (!existsSync(dir)) {
+    return [];
+  }
+
+  try {
+    return readdirSync(dir, { withFileTypes: true, encoding: "utf8" })
+      .filter((e) => e.isFile())
+      .map((e) => join(dir, e.name))
+      .sort((a, b) => a.localeCompare(b));
+  } catch {
+    return [];
+  }
+}
+
 export function cleanupOutdatedBugImages(retentionDays = 30): {
   deletedFiles: number;
   deletedDirs: number;

@@ -16,6 +16,7 @@ import { CDPBugsListCommand } from "./commands/cdp/bugs-list";
 import { CDPBugsShowCommand } from "./commands/cdp/bugs-show";
 import { BugAttachCommand } from "./commands/bug/attach";
 import { BugImagesCommand } from "./commands/bug/images";
+import { MrxCommand } from "./commands/workflow/mrx";
 
 async function main() {
   const parsed = cliParser.parse(process.argv);
@@ -95,5 +96,6 @@ commandRegistry.register(new CDPBugsListCommand());
 commandRegistry.register(new CDPBugsShowCommand());
 commandRegistry.register(new BugAttachCommand());
 commandRegistry.register(new BugImagesCommand());
+commandRegistry.register(new MrxCommand());
 
 main();
