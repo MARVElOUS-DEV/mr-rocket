@@ -1,6 +1,6 @@
 import { BaseCommand } from "../base-command.js";
 import type { ParsedArgs } from "../../utils/cli-parser.js";
-import type { CommandOutput } from "../../types/command-output.js";
+import type { CommandOutput, TableOutput } from "../../types/command-output.js";
 import { CDPService } from "../../services/cdp.service.js";
 import { configManager } from "../../core/config-manager.js";
 
@@ -30,36 +30,45 @@ export class CDPBugsListCommand extends BaseCommand {
 
     const bugs = await service.listBugs(filter);
 
-    if (args.flags.get("json")) {
-      return {
-        success: true,
-        data: bugs,
-        message: JSON.stringify(bugs, null, 2),
-      };
-    }
-
     if (bugs.length === 0) {
       return {
         success: true,
         data: bugs,
         message: "No bugs found matching the filter criteria.",
+        meta: {
+          count: 0,
+        },
       };
     }
 
-    let message = `Found ${bugs.length} bug(s):\n\n`;
-    for (const bug of bugs) {
-      message += `#${bug.id} [${bug.status}] ${bug.title}\n`;
-      message += `  Priority: ${bug.priority}`;
-      if (bug.assignee) {
-        message += ` | Assignee: ${bug.assignee}`;
-      }
-      message += `\n`;
+    if (args.json) {
+      return {
+        success: true,
+        data: bugs,
+        meta: {
+          count: bugs.length,
+        },
+      };
     }
+
+    const table: TableOutput = {
+      headers: ["ID", "Status", "Priority", "Assignee", "Title"],
+      rows: bugs.map((bug) => [
+        `#${bug.id}`,
+        bug.status,
+        bug.priority,
+        bug.assignee ?? "",
+        bug.title,
+      ]),
+    };
 
     return {
       success: true,
-      data: bugs,
-      message,
+      data: table,
+      message: `Found ${bugs.length} bug(s)`,
+      meta: {
+        count: bugs.length,
+      },
     };
   }
 

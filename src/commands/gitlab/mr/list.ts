@@ -1,6 +1,6 @@
 import { BaseCommand } from "../../base-command.ts";
 import type { ParsedArgs } from "../../../utils/cli-parser.ts";
-import type { CommandOutput } from "../../../types/command-output.ts";
+import type { CommandOutput, TableOutput } from "../../../types/command-output.ts";
 import type { AppConfig } from "../../../types/config.ts";
 import type { MRFilter, MergeRequest } from "../../../types/gitlab.ts";
 import type { GitLabService } from "../../../services/gitlab.service.ts";
@@ -135,9 +135,32 @@ export class MrListCommand extends BaseCommand {
       })
       .use(withOutput((ctx) => {
         const mrs = ctx.mrs ?? [];
+
+        if (ctx.args.json) {
+          return {
+            success: true,
+            data: mrs,
+            meta: {
+              count: mrs.length,
+            },
+          };
+        }
+
+        const table: TableOutput = {
+          headers: ["IID", "State", "Title", "Author", "Updated", "URL"],
+          rows: mrs.map((mr) => [
+            `!${mr.iid}`,
+            mr.state,
+            mr.title,
+            mr.author.username,
+            mr.updatedAt,
+            mr.webUrl,
+          ]),
+        };
+
         return {
           success: true,
-          data: mrs,
+          data: table,
           message: `Found ${mrs.length} merge requests`,
           meta: {
             count: mrs.length,

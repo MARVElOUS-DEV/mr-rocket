@@ -1,6 +1,6 @@
 import { BaseCommand } from "../base-command";
 import type { ParsedArgs } from "../../utils/cli-parser";
-import type { CommandOutput } from "../../types/command-output";
+import type { CommandOutput, TableOutput } from "../../types/command-output";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { existsSync, readdirSync } from "node:fs";
@@ -34,16 +34,27 @@ export class BugImagesCommand extends BaseCommand {
     }
 
     if (args.json) {
-      return { success: true, data: bugs, message: JSON.stringify(bugs, null, 2) };
+      return {
+        success: true,
+        data: bugs,
+        meta: {
+          count: bugs.length,
+        },
+      };
     }
 
-    // Format table
-    const lines = ["Bug ID\t\tImages"];
-    lines.push("-".repeat(60));
-    for (const bug of bugs) {
-      lines.push(`${bug.bugId}\t\t${bug.images.join(", ")}`);
-    }
+    const table: TableOutput = {
+      headers: ["Bug ID", "Images"],
+      rows: bugs.map((bug) => [bug.bugId, bug.images.join(", ")]),
+    };
 
-    return { success: true, message: lines.join("\n"), data: bugs };
+    return {
+      success: true,
+      data: table,
+      message: `Found ${bugs.length} bug(s) with images`,
+      meta: {
+        count: bugs.length,
+      },
+    };
   }
 }

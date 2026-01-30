@@ -1,7 +1,6 @@
 import { cliParser } from "./utils/cli-parser";
 import { commandRegistry } from "./commands/index";
 import { configManager } from "./core/config-manager";
-import { outputFormatter } from "./core/output-formatter";
 import { logger, LogLevel } from "./core/logger";
 import { fileURLToPath } from "node:url";
 import { MrCreateCommand } from "./commands/gitlab/mr/create";

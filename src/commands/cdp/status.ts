@@ -25,17 +25,20 @@ export class CDPStatusCommand extends BaseCommand {
     });
     const status = await service.getAuthStatus();
 
-    if (args.flags.get("json")) {
+    if (args.json) {
       return {
-        success: true,
+        success: status.authenticated,
         data: status,
-        message: JSON.stringify(status, null, 2),
+        ...(status.authenticated
+          ? {}
+          : { message: `CDP auth not available: ${status.error}` }),
       };
     }
 
     if (!status.authenticated) {
       return {
         success: false,
+        data: status,
         message: `CDP auth not available: ${status.error}`,
       };
     }

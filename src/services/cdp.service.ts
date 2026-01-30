@@ -41,6 +41,8 @@ type ResponseWrapper<T> = {
   data?: T;
 };
 
+const productGroupId = "1574936024094527490";
+
 export class CDPService {
   private host: string;
   private cookies: CDPCookie[] = [];
@@ -147,7 +149,7 @@ export class CDPService {
         Cookie: this.getCookieHeader(),
         ...(isFormData ? {} : { "Content-Type": "application/json" }),
         Authorization: this.getCookieTarget("SID"),
-        ResourceView: `enterpriseId:${this.getCookieTarget("enterpriseId")};productGroupId:1574936024094527490`,
+        ResourceView: `enterpriseId:${this.getCookieTarget("enterpriseId")};productGroupId:${productGroupId}`,
         ...options.headers,
       },
     };
@@ -192,9 +194,14 @@ export class CDPService {
         };
       }
 
-      const authData = await readCdpAuthData({ authFilePath: this.authFilePath });
+      const authData = await readCdpAuthData({
+        authFilePath: this.authFilePath,
+      });
       if (!authData) {
-        return { authenticated: false, error: "Invalid CDP auth data structure" };
+        return {
+          authenticated: false,
+          error: "Invalid CDP auth data structure",
+        };
       }
 
       const site = selectCdpSiteAuthData(authData, { host: this.host });
@@ -281,7 +288,12 @@ export class CDPService {
     const params = {
       itemId: bug.id,
       commentId: bug.id,
-      commentDesc: this.createCommentContent(reason, solution, imageUrls, mrUrl),
+      commentDesc: this.createCommentContent(
+        reason,
+        solution,
+        imageUrls,
+        mrUrl,
+      ),
       itemType: "bug",
       review: false,
       noticeUserSet: [],

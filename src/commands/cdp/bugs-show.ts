@@ -31,11 +31,10 @@ export class CDPBugsShowCommand extends BaseCommand {
     const response = await service.getBug(bugId);
     const bug = response.data.fieldMap;
 
-    if (args.flags.get("json")) {
+    if (args.json) {
       return {
         success: true,
         data: bug,
-        message: JSON.stringify(bug, null, 2),
       };
     }
 

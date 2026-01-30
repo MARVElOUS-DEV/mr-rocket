@@ -1,6 +1,6 @@
 import { BaseCommand } from "../base-command.ts";
 import type { ParsedArgs } from "../../utils/cli-parser.ts";
-import type { CommandOutput } from "../../types/command-output.ts";
+import type { CommandOutput, TableOutput } from "../../types/command-output.ts";
 import { configManager } from "../../core/config-manager.ts";
 import { logger } from "../../core/logger.ts";
 import { ConfluenceService } from "../../services/confluence.service.ts";
@@ -57,10 +57,30 @@ export class WikiSearchCommand extends BaseCommand {
     logger.debug("Executing wiki search", { query, limit, offset, spaceKey, host: config.confluence.host });
     const results = await confluence.searchPages(query, { limit, offset, spaceKey });
 
+    if (args.json) {
+      return {
+        success: true,
+        data: results,
+        meta: {
+          count: results.length,
+        },
+      };
+    }
+
+    const table: TableOutput = {
+      headers: ["Title", "Space", "Updated", "URL"],
+      rows: results.map((page) => [
+        page.title,
+        page.spaceKey ?? "",
+        page.friendlyLastModified || page.lastModified || "",
+        page.url ?? "",
+      ]),
+    };
+
     return {
       success: true,
-      data: results,
-      message: `Found ${results.length} pages`,
+      data: table,
+      message: `Found ${results.length} page(s)`,
       meta: {
         count: results.length,
       },

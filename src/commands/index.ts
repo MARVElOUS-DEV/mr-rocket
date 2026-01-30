@@ -1,6 +1,7 @@
 import type { Command } from "./command.interface";
 import type { ParsedArgs } from "../utils/cli-parser";
 import { error, success } from "../utils/colors";
+import { outputFormatter } from "../core/output-formatter";
 
 class CommandRegistry {
   private commands: Map<string, Command> = new Map();
@@ -24,6 +25,7 @@ class CommandRegistry {
   async execute(parsed: ParsedArgs): Promise<boolean> {
     const match = this.resolveCommand(parsed);
     const command = match?.command;
+    const effectiveParsed = match?.parsed ?? parsed;
 
     if (!command) {
       console.log(error(`Unknown command: ${parsed.positional[0] || ""}`));
@@ -37,21 +39,50 @@ class CommandRegistry {
     }
 
     try {
-      const output = await command.execute(match?.parsed ?? parsed);
+      const output = await command.execute(effectiveParsed);
+
+      if (effectiveParsed.json) {
+        this.write(outputFormatter.format(output, true));
+        return output.success;
+      }
 
       if (output.success) {
         if (output.message) {
           console.log(success(output.message));
         }
+
+        if (this.shouldRenderData(output.data)) {
+          this.write(outputFormatter.format({ success: true, data: output.data }, false));
+        }
+
         return true;
-      } else {
-        console.log(error(output.message || output.error?.message || "Command failed"));
-        return false;
       }
+
+      console.log(error(output.message || output.error?.message || "Command failed"));
+      return false;
     } catch (err) {
       console.log(error(err instanceof Error ? err.message : String(err)));
       return false;
     }
+  }
+
+  private shouldRenderData(data: unknown): boolean {
+    if (!data) return false;
+    if (Array.isArray(data)) return true;
+
+    if (typeof data === "object") {
+      return "headers" in data && "rows" in data;
+    }
+
+    return false;
+  }
+
+  private write(text: string): void {
+    if (text.length === 0) {
+      return;
+    }
+
+    process.stdout.write(text.endsWith("\n") ? text : `${text}\n`);
   }
 
   private resolveCommand(
