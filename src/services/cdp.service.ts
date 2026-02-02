@@ -262,10 +262,35 @@ export class CDPService {
     };
 
     const endpoint = `/api/v1/pcd/item-table/page`;
-    return this.request<BugMetadata[]>(endpoint, {
+    const response = await this.request<{
+      data: { records: Array<{ fieldMap: Record<string, unknown> }> };
+    }>(endpoint, {
       method: "POST",
       body: JSON.stringify(param),
     });
+
+    const records = response?.data?.records ?? [];
+    return records.map((r) => this.mapFieldMapToBugMetadata(r.fieldMap));
+  }
+
+  private mapFieldMapToBugMetadata(fm: Record<string, unknown>): BugMetadata {
+    const status = fm.job_status as { statusName?: string } | undefined;
+    const severity = fm.job_severity as { label?: string } | undefined;
+    const assignees = fm.multi_assign_to as Array<{ displayName?: string }> | undefined;
+    const createdBy = fm.created_by as { displayName?: string } | undefined;
+
+    return {
+      id: String(fm.id ?? ""),
+      product_id: String(fm.product_id ?? ""),
+      index_code: String(fm.index_code ?? ""),
+      title: String(fm.title ?? ""),
+      status: status?.statusName ?? "",
+      priority: severity?.label ?? "",
+      assignee: assignees?.[0]?.displayName,
+      createdAt: fm.created_time ? new Date(fm.created_time as number).toISOString() : "",
+      updatedAt: fm.last_edited_date ? new Date(fm.last_edited_date as number).toISOString() : "",
+      description: fm.description as string | undefined,
+    };
   }
 
   async getBug(bugLabelId: string) {

@@ -6,7 +6,9 @@ import { configManager } from "../../core/config-manager.js";
 
 export function BugsList() {
   const store = getStore();
-  const [bugs, setBugs] = useState<BugMetadata[]>(store.getState().loadedBugs || []);
+  const [bugs, setBugs] = useState<BugMetadata[]>(
+    store.getState().loadedBugs || [],
+  );
   const [loading, setLoading] = useState(bugs.length === 0);
   const [error, setError] = useState<string>();
 
@@ -20,20 +22,9 @@ export function BugsList() {
           return;
         }
         const service = new CDPService(config.cdp);
-        const data = await service.listBugs({showModule: "workstation_bug"});
-        const { success, message } = data as any;
-        if (success) {
-          const { data: { records } } = data as any;
-          if (Array.isArray(records)) {
-            store.dispatch({ type: "SET_BUGS", bugs: records });
-            setBugs(records);
-          } else {
-            store.dispatch({ type: "SET_BUGS", bugs: [] });
-            setBugs([]);
-          }
-        } else {
-          setError("Failed to fetch bugs from CDP: " + message);
-        }
+        const records = await service.listBugs({ showModule: "workstation_bug" });
+        store.dispatch({ type: "SET_BUGS", bugs: records });
+        setBugs(records);
       } catch (err: any) {
         setError(err.message);
       } finally {
