@@ -203,7 +203,9 @@ export class MrxCommand extends BaseCommand {
           rawDescription.includes("{{cdpLink}}") ||
           rawDescription.includes("{{selfTestResults}}") ||
           rawDescription.includes("{{utScreenshots}}") ||
-          rawDescription.includes("{{e2eScreenshots}}");
+          rawDescription.includes("{{e2eScreenshots}}") ||
+          rawDescription.includes("{{solution}}") ||
+          rawDescription.includes("{{backendDependency}}");
 
         if (!ctx.dryRun) {
           ctx.preparedDescription = hasTemplatePlaceholders
@@ -217,6 +219,7 @@ export class MrxCommand extends BaseCommand {
                 cdpItemId: ctx.cdpBug?.index_code,
                 utScreenshots: ctx.utScreenshots,
                 e2eScreenshots: ctx.e2eScreenshots,
+                solution: ctx.commentInput?.solution,
               })
             : rawDescription.trim().length > 0
               ? await prepareDescriptionWithUploads(
@@ -437,7 +440,7 @@ export class MrxCommand extends BaseCommand {
     help +=
       "  --title <title>         MR title (default: bug title or latest commit title)\n";
     help +=
-      "  --description <text>    MR description template (default: built-in template; supports {{cdpLink}}/{{selfTestResults}}/{{utScreenshots}}/{{e2eScreenshots}})\n";
+      "  --description <text>    MR description template (default: built-in template; supports {{cdpLink}}/{{selfTestResults}}/{{utScreenshots}}/{{e2eScreenshots}}/{{solution}}/{{backendDependency}})\n";
     help += "  --labels <l1,l2>        Comma-separated labels\n";
     help += "  --assignee-id <id>      Assignee user ID\n";
     help += "  --reviewer-id <id>      Reviewer user ID\n";
@@ -452,8 +455,8 @@ export class MrxCommand extends BaseCommand {
     help +=
       "  --comment <text>        Provide comment input (use a line with '---' to split reason/solution)\n";
     help += "  --comment-file <path>   Read comment input from a file\n";
-    help += "  --reason <text>         Reason (overrides parsed reason)\n";
-    help += "  --solution <text>       Solution (overrides parsed solution)\n";
+    help += "  --reason <text>         Reason (required)\n";
+    help += "  --solution <text>       Solution (required, also used for MR description '修改描述' field)\n";
     help +=
       "  --no-local-images       Do not upload ~/.mr-rocket/images/<bugId> files to CDP\n\n";
     help += "Example:\n";
@@ -670,9 +673,15 @@ export class MrxCommand extends BaseCommand {
       solution: solutionOpt ?? base.solution,
     };
 
-    if (!resolved.reason || !resolved.solution) {
+    if (!resolved.solution) {
       throw new ValidationError(
-        "CDP comment requires both reason and solution. Provide via --reason/--solution (recommended) or --comment (split with a line containing ---).",
+        "CDP comment requires --solution. This value is also used for the MR description '修改描述' field.",
+      );
+    }
+
+    if (!resolved.reason) {
+      throw new ValidationError(
+        "CDP comment requires --reason.",
       );
     }
 

@@ -53,9 +53,10 @@ export function listStoredBugImages(): StoredBugImages[] {
 
   const bugs = readdirSync(BUG_IMAGES_DIR, { withFileTypes: true, encoding: "utf8" })
     .filter((d) => d.isDirectory())
-    .map((d): StoredBugImages => {
+    .map((d) => {
       const bugId = d.name;
       const bugDir = join(BUG_IMAGES_DIR, bugId);
+      const dirStat = statSync(bugDir);
       const images = readdirSync(bugDir, { withFileTypes: true, encoding: "utf8" })
         .filter((e) => e.isFile())
         .map((e): StoredImage => {
@@ -64,10 +65,11 @@ export function listStoredBugImages(): StoredBugImages[] {
           return { fileName: e.name, fullPath, mtimeMs: stat.mtimeMs };
         })
         .sort((a, b) => a.fileName.localeCompare(b.fileName));
-      return { bugId, images };
+      return { bugId, images, birthtimeMs: dirStat.birthtimeMs };
     })
     .filter((b) => b.images.length > 0)
-    .sort((a, b) => a.bugId.localeCompare(b.bugId));
+    .sort((a, b) => b.birthtimeMs - a.birthtimeMs)
+    .map(({ bugId, images }): StoredBugImages => ({ bugId, images }));
 
   return bugs;
 }

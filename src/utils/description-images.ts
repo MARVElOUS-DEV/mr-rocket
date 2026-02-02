@@ -30,9 +30,9 @@ export const CDP_LINK_SUFFIX_TEMPLATE =
 export const DESCRIPTION_TEMPLATE = `
 <h3>CDP链接:</h3>{{cdpLink}}
 
-<h3>修改描述:</h3>
+<h3>修改描述:</h3>{{solution}}
 
-<h3>后端修改依赖:</h3>
+<h3>后端修改依赖:</h3>{{backendDependency}}
 
 <h3>自测结果:</h3>
 {{selfTestResults}}
@@ -53,6 +53,8 @@ type PrepareMrDescriptionOptions = {
   cdpItemId?: string;
   utScreenshots?: string;
   e2eScreenshots?: string;
+  solution?: string;
+  backendDependency?: string;
 };
 
 export async function prepareMrDescriptionFromTemplate(
@@ -81,12 +83,16 @@ export async function prepareMrDescriptionFromTemplate(
     options.utScreenshots?.trim() || DEFAULT_UT_SCREENSHOTS;
   const e2eScreenshots =
     options.e2eScreenshots?.trim() || DEFAULT_E2E_SCREENSHOTS;
+  const solution = options.solution?.trim() || "";
+  const backendDependency = options.backendDependency?.trim() || "无";
 
   const rendered = replaceTemplatePlaceholders(template, {
     cdpLink,
     selfTestResults,
     utScreenshots,
     e2eScreenshots,
+    solution,
+    backendDependency,
   });
 
   return prepareDescriptionWithUploads(options.gitlab, options.projectId, rendered);
@@ -99,6 +105,8 @@ export function renderMrDescriptionTemplate(
     selfTestResults?: string;
     utScreenshots?: string;
     e2eScreenshots?: string;
+    solution?: string;
+    backendDependency?: string;
   },
 ): string {
   return replaceTemplatePlaceholders(template, {
@@ -106,6 +114,8 @@ export function renderMrDescriptionTemplate(
     selfTestResults: replacements.selfTestResults ?? "",
     utScreenshots: replacements.utScreenshots ?? "",
     e2eScreenshots: replacements.e2eScreenshots ?? "",
+    solution: replacements.solution ?? "",
+    backendDependency: replacements.backendDependency ?? "无",
   });
 }
 

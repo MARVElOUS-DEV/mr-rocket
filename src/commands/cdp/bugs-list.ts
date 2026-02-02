@@ -26,6 +26,7 @@ export class CDPBugsListCommand extends BaseCommand {
       priority: args.options.get("priority"),
       assignee: args.options.get("assignee"),
       search: args.options.get("search") || args.options.get("q"),
+      showModule: "workstation_bug",
     };
 
     const bugs = await service.listBugs(filter);
