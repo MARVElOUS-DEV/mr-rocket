@@ -1,10 +1,11 @@
 import { spawn } from "node:child_process";
 import { configManager } from "../core/config-manager";
 import type { AgentConfig, AgentResult } from "../types/agent";
+import { Spinner } from "../utils/spinner";
 
 export interface RunOptions {
   agentName?: string;
-  cwd?: string;
+  repo?: string;
 }
 
 export class AgentService {
@@ -34,7 +35,7 @@ export class AgentService {
       );
     }
 
-    return this.spawn(name, agentConfig, prompt, options?.cwd);
+    return this.spawn(name, agentConfig, prompt, options?.repo);
   }
 
   async runMultiple(
@@ -57,7 +58,7 @@ export class AgentService {
     name: string,
     config: AgentConfig,
     prompt: string,
-    cwd?: string,
+    repo?: string,
   ): Promise<AgentResult> {
     const startTime = Date.now();
     const args = [
@@ -65,11 +66,13 @@ export class AgentService {
       ...(config.args || []),
       prompt,
     ];
+    const spinner = new Spinner();
 
     return new Promise((resolve, reject) => {
+      spinner.start(`Running ${name}...`);
       const proc = spawn(config.command, args, {
         stdio: ["pipe", "pipe", "pipe"],
-        cwd,
+        cwd: repo,
       });
 
       let stdout = "";
@@ -78,11 +81,13 @@ export class AgentService {
       proc.stdout.on("data", (data) => (stdout += data.toString()));
       proc.stderr.on("data", (data) => (stderr += data.toString()));
 
-      proc.on("error", (err) =>
-        reject(new Error(`Failed to spawn ${name}: ${err.message}`)),
-      );
+      proc.on("error", (err) => {
+        spinner.stop();
+        reject(new Error(`Failed to spawn ${name}: ${err.message}`));
+      });
 
       proc.on("close", (exitCode) => {
+        spinner.stop();
         resolve({
           agent: name,
           output: stdout || stderr,

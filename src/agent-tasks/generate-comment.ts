@@ -9,7 +9,7 @@ export interface CommentResult {
 export interface GenerateCommentOptions {
   agentName?: string;
   target?: string;
-  cwd?: string;
+  repo?: string;
 }
 
 export async function generateComment(
@@ -24,7 +24,7 @@ Respond ONLY with valid JSON (no markdown):
   try {
     const result = await agentService.run(prompt, {
       agentName: options?.agentName,
-      cwd: options?.cwd,
+      repo: options?.repo,
     });
     const jsonMatch = result.output.match(/\{[\s\S]*\}/);
     if (jsonMatch) {

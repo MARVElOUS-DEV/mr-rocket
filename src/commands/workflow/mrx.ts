@@ -133,9 +133,10 @@ export class MrxCommand extends BaseCommand {
           projectDefaults?.reviewerId;
         ctx.reviewerIds = this.resolveReviewerIds(ctx);
 
+        const repo = ctx.args.options.get("repo");
         ctx.source = ctx.args.options.get("source")?.trim();
         if (!ctx.source) {
-          ctx.source = await this.inferGitBranch();
+          ctx.source = await this.inferGitBranch(repo);
         }
         ctx.target =
           ctx.args.options.get("target") ||
@@ -155,7 +156,7 @@ export class MrxCommand extends BaseCommand {
         ctx.commentInput = await this.resolveCommentInput(
           ctx.args,
           ctx.target,
-          ctx.args.options.get("cwd") || process.cwd(),
+          ctx.args.options.get("repo") || process.cwd(),
         );
 
         return next();
@@ -466,7 +467,7 @@ export class MrxCommand extends BaseCommand {
     help +=
       "  --agent <name>          Use specific AI agent to generate reason/solution\n";
     help +=
-      "  --cwd <path>            Working directory for AI agent (default: current dir)\n";
+      "  --repo <path>           Working directory for AI agent (default: current dir)\n";
     help +=
       "  --no-ai                 Disable AI auto-generation even if agent is enabled\n";
     help +=
@@ -478,7 +479,7 @@ export class MrxCommand extends BaseCommand {
       "  mr-rocket mrx                        # Auto-generate if agent enabled in config\n";
     help += "  mr-rocket mrx --agent claude         # Use specific agent\n";
     help +=
-      "  mr-rocket mrx --cwd ~/projects/repo  # Run agent in specific directory\n";
+      "  mr-rocket mrx --repo ~/projects/repo  # Run agent in specific directory\n";
     return help;
   }
 
@@ -491,12 +492,12 @@ export class MrxCommand extends BaseCommand {
     console.log(formatted);
   }
 
-  private async inferGitBranch(): Promise<string> {
+  private async inferGitBranch(cwd?: string): Promise<string> {
     const branch = await new Promise<string>((resolve, reject) => {
       execFile(
         "git",
         ["rev-parse", "--abbrev-ref", "HEAD"],
-        { cwd: process.cwd() },
+        { cwd: cwd || process.cwd() },
         (err, stdout, stderr) => {
           if (err) {
             reject(
