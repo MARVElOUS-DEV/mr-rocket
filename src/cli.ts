@@ -17,6 +17,8 @@ import { CDPBugsShowCommand } from "./commands/cdp/bugs-show";
 import { BugAttachCommand } from "./commands/bug/attach";
 import { BugImagesCommand } from "./commands/bug/images";
 import { MrxCommand } from "./commands/workflow/mrx";
+import { AgentRunCommand } from "./commands/agent/run";
+import { AgentListCommand } from "./commands/agent/list";
 
 async function main() {
   const parsed = cliParser.parse(process.argv);
@@ -97,5 +99,7 @@ commandRegistry.register(new CDPBugsShowCommand());
 commandRegistry.register(new BugAttachCommand());
 commandRegistry.register(new BugImagesCommand());
 commandRegistry.register(new MrxCommand());
+commandRegistry.register(new AgentRunCommand());
+commandRegistry.register(new AgentListCommand());
 
 main();

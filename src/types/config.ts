@@ -1,4 +1,6 @@
-export interface AppConfig {
+import type { AgentsConfig } from "./agent";
+
+export interface AppConfig extends AgentsConfig {
   version: string;
   gitlab: GitLabConfig;
   confluence: ConfluenceConfig;

@@ -30,11 +30,11 @@ import type { BugMetadata } from "../../services/cdp.service.ts";
 import { listBugImagePaths } from "../../utils/bug-image-store.ts";
 import { warning } from "../../utils/colors.ts";
 import { execFile } from "node:child_process";
-
-type CommentInput = {
-  reason: string;
-  solution: string;
-};
+import { agentService } from "../../services/agent.service.ts";
+import {
+  generateComment,
+  type CommentResult as CommentInput,
+} from "../../agent-tasks";
 
 type GitProjectRef = {
   host: string;
@@ -152,7 +152,11 @@ export class MrxCommand extends BaseCommand {
           );
         }
 
-        ctx.commentInput = await this.resolveCommentInput(ctx.args);
+        ctx.commentInput = await this.resolveCommentInput(
+          ctx.args,
+          ctx.target,
+          ctx.args.options.get("cwd") || process.cwd(),
+        );
 
         return next();
       })
@@ -455,13 +459,26 @@ export class MrxCommand extends BaseCommand {
     help +=
       "  --comment <text>        Provide comment input (use a line with '---' to split reason/solution)\n";
     help += "  --comment-file <path>   Read comment input from a file\n";
-    help += "  --reason <text>         Reason (required)\n";
-    help += "  --solution <text>       Solution (required, also used for MR description '修改描述' field)\n";
+    help +=
+      "  --reason <text>         Reason (auto-generated if agent enabled)\n";
+    help +=
+      "  --solution <text>       Solution (auto-generated if agent enabled, also used for MR '修改描述')\n";
+    help +=
+      "  --agent <name>          Use specific AI agent to generate reason/solution\n";
+    help +=
+      "  --cwd <path>            Working directory for AI agent (default: current dir)\n";
+    help +=
+      "  --no-ai                 Disable AI auto-generation even if agent is enabled\n";
     help +=
       "  --no-local-images       Do not upload ~/.mr-rocket/images/<bugId> files to CDP\n\n";
     help += "Example:\n";
     help +=
-      '  mr-rocket mrx --source feature/bugfix --bug-id BUG-12345 --reason "root cause" --solution "fix applied"\n';
+      '  mr-rocket mrx --reason "root cause" --solution "fix applied"   # Manual input\n';
+    help +=
+      "  mr-rocket mrx                        # Auto-generate if agent enabled in config\n";
+    help += "  mr-rocket mrx --agent claude         # Use specific agent\n";
+    help +=
+      "  mr-rocket mrx --cwd ~/projects/repo  # Run agent in specific directory\n";
     return help;
   }
 
@@ -653,11 +670,17 @@ export class MrxCommand extends BaseCommand {
     }
   }
 
-  private async resolveCommentInput(args: ParsedArgs): Promise<CommentInput> {
+  private async resolveCommentInput(
+    args: ParsedArgs,
+    target?: string,
+    cwd?: string,
+  ): Promise<CommentInput> {
     const reasonOpt = args.options.get("reason")?.trim();
     const solutionOpt = args.options.get("solution")?.trim();
     const commentText = args.options.get("comment");
     const commentFile = args.options.get("comment-file");
+    const noAi = args.flags.has("no-ai");
+    const agentName = args.options.get("agent");
 
     let base: CommentInput = { reason: "", solution: "" };
     if (commentText) {
@@ -673,19 +696,46 @@ export class MrxCommand extends BaseCommand {
       solution: solutionOpt ?? base.solution,
     };
 
+    // Use AI if enabled (or explicit --agent) and fields are missing
+    const shouldUseAi =
+      !noAi &&
+      (!resolved.reason || !resolved.solution) &&
+      (agentName || agentService.isEnabled());
+    if (shouldUseAi) {
+      const aiGenerated = await this.generateCommentWithAi(
+        agentName,
+        target,
+        cwd,
+      );
+      if (!resolved.reason && aiGenerated.reason) {
+        resolved.reason = aiGenerated.reason;
+      }
+      if (!resolved.solution && aiGenerated.solution) {
+        resolved.solution = aiGenerated.solution;
+      }
+    }
+
     if (!resolved.solution) {
       throw new ValidationError(
-        "CDP comment requires --solution. This value is also used for the MR description '修改描述' field.",
+        "CDP comment requires --solution. Enable AI agent in config or use --agent <name> to auto-generate.",
       );
     }
 
     if (!resolved.reason) {
       throw new ValidationError(
-        "CDP comment requires --reason.",
+        "CDP comment requires --reason. Enable AI agent in config or use --agent <name> to auto-generate.",
       );
     }
 
     return resolved;
+  }
+
+  private async generateCommentWithAi(
+    agentName?: string,
+    target?: string,
+    cwd?: string,
+  ): Promise<CommentInput> {
+    return generateComment({ agentName, target, cwd });
   }
 
   private parseCommentText(input: string): CommentInput {

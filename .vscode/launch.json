@@ -6,6 +6,14 @@
       "request": "attach",
       "name": "Debug TUI (Attach)",
       "url": "ws://localhost:6499/"
+    },
+    {
+      "type": "bun",
+      "request": "launch",
+      "name": "Debug CLI",
+      "program": "src/cli.ts",
+      "args": ["mrx", "--cwd", "/your-working-repo", "--bug-id", "10478079"],
+      "cwd": "${workspaceFolder}"
     }
   ]
 }

@@ -40,6 +40,11 @@ On first run, a default config will be created at `~/.mr-rocket/config.json`:
     "token": "YOUR_CONFLUENCE_PAT_HERE",
     "defaultSpaceKey": ""
   },
+  "agents": {
+    "claude": { "command": "claude", "args": ["--print"], "enabled": true },
+    "codex": { "command": "codex", "subcommand": "exec" },
+    "gemini": { "command": "gemini", "args": ["-p"] }
+  },
   "ui": {
     "refreshInterval": 10000,
     "maxHistoryItems": 1000
