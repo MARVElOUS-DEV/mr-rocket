@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mr-Rocket Flow"
+  short_description: "Operate MR and bug workflows with Mr-Rocket"
+  default_prompt: "Use $mr-rocket-flow to create a dry-run MR and CDP bug comment for my current branch."

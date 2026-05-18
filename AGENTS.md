@@ -51,6 +51,10 @@ No test framework is currently configured in this project.
 
 Mr-Rocket is an extensible CLI/TUI tool for daily workflow automation. It supports both headless mode (scriptable, JSON output) and TUI mode (interactive, history viewing, real-time status).
 
+## Reusable Workflow Skill
+
+When the user wants an agent to operate Mr-Rocket for daily MR, CDP bug, wiki, image attachment, history/log, or `mrx` workflow tasks, read `skills/mr-rocket-flow/SKILL.md` first and follow it. That portable skill is intended for Codex, Claude, Cursor Agent, OpenCode, and other coding agents.
+
 ### Packages
 
 - **Root CLI/TUI app**: Main CLI/TUI application (not yet moved into a workspace package)

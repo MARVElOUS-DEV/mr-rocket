@@ -1,0 +1,10 @@
+---
+description: Use Mr-Rocket for GitLab MR, CDP bug, wiki, image, logs, agent, and mrx workflow tasks.
+alwaysApply: false
+---
+
+# Mr-Rocket Flow
+
+When the user asks you to operate Mr-Rocket as a daily MR or bug handling tool, read `skills/mr-rocket-flow/SKILL.md` and follow that workflow.
+
+Use `skills/mr-rocket-flow/references/commands.md` for detailed command options.

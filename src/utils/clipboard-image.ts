@@ -9,6 +9,17 @@ import { $ } from "bun";
  * Returns null if no image in clipboard.
  */
 export async function saveClipboardImage(): Promise<string | null> {
+  switch (process.platform) {
+    case "darwin":
+      return saveClipboardImageMac();
+    case "win32":
+      return saveClipboardImageWindows();
+    default:
+      return null;
+  }
+}
+
+async function saveClipboardImageMac(): Promise<string | null> {
   const baseName = `mr-rocket-clipboard-${Date.now()}`;
 
   // First try to get file path from clipboard (when file is copied in Finder)
@@ -20,7 +31,7 @@ export async function saveClipboardImage(): Promise<string | null> {
       return ""
     end try
   `;
-  
+
   const filePath = (await $`osascript -e ${fileScript}`.text()).trim();
   if (filePath && existsSync(filePath) && /\.(png|jpg|jpeg|gif|webp|bmp)$/i.test(filePath)) {
     const ext = extname(filePath).toLowerCase() || ".png";
@@ -45,10 +56,50 @@ export async function saveClipboardImage(): Promise<string | null> {
   `;
 
   const result = await $`osascript -e ${pngScript}`.text();
-
   if (result.trim() === "ok" && existsSync(tempPath)) {
     return tempPath;
   }
+  return null;
+}
 
+async function saveClipboardImageWindows(): Promise<string | null> {
+  const baseName = `mr-rocket-clipboard-${Date.now()}`;
+  const tempPath = join(tmpdir(), `${baseName}.png`).replace(/\\/g, "\\\\");
+
+  const psScript = `
+Add-Type -AssemblyName System.Windows.Forms
+$files = [System.Windows.Forms.Clipboard]::GetFileDropList()
+if ($files.Count -gt 0) {
+  $f = $files[0]
+  if ($f -match '\\.(png|jpg|jpeg|gif|webp|bmp)$') {
+    Write-Output "FILE:$f"
+    exit
+  }
+}
+$img = [System.Windows.Forms.Clipboard]::GetImage()
+if ($img) {
+  $img.Save("${tempPath}", [System.Drawing.Imaging.ImageFormat]::Png)
+  Write-Output "OK"
+} else {
+  Write-Output "NONE"
+}
+`;
+
+  const result = (await $`powershell -NoProfile -Command ${psScript}`.text()).trim();
+
+  if (result.startsWith("FILE:")) {
+    const filePath = result.slice(5);
+    if (existsSync(filePath)) {
+      const ext = extname(filePath).toLowerCase() || ".png";
+      const destPath = join(tmpdir(), `${baseName}${ext}`);
+      copyFileSync(filePath, destPath);
+      return destPath;
+    }
+  } else if (result === "OK") {
+    const actualPath = tempPath.replace(/\\\\/g, "\\");
+    if (existsSync(actualPath)) {
+      return actualPath;
+    }
+  }
   return null;
 }
