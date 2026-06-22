@@ -33,6 +33,7 @@ import { execFile } from "node:child_process";
 import { agentService } from "../../services/agent.service.ts";
 import {
   generateComment,
+  generateCommitMessage,
   type CommentResult as CommentInput,
 } from "../../agent-tasks";
 
@@ -48,6 +49,7 @@ type MrxChainContext = {
   gitlab?: GitLabService;
   cdp?: CDPService;
   gitProject?: GitProjectRef;
+  repo?: string;
 
   // MR inputs
   projectId?: string;
@@ -63,6 +65,14 @@ type MrxChainContext = {
   preparedDescription?: string;
   utScreenshots?: string;
   e2eScreenshots?: string;
+  pushSource?: boolean;
+  pushRemote?: string;
+  pushCommitCount?: number;
+  pushedSource?: boolean;
+  pushSkippedReason?: string;
+  autoCommitHash?: string;
+  autoCommitMessage?: string;
+  wouldCommitCurrentChanges?: boolean;
 
   // CDP comment inputs
   bugId?: string;
@@ -118,8 +128,11 @@ export class MrxCommand extends BaseCommand {
       .use(async (ctx, next) => {
         ctx.dryRun = ctx.args.flags.has("dry-run");
         ctx.includeLocalImages = !ctx.args.flags.has("no-local-images");
+        ctx.repo = ctx.args.options.get("repo") || process.cwd();
+        ctx.pushSource = !ctx.args.flags.has("no-push");
+        ctx.pushRemote = ctx.args.options.get("push-remote") || "origin";
 
-        ctx.bugId = await this.resolveBugId(ctx.args);
+        ctx.bugId = await this.resolveBugId(ctx.args, ctx.repo);
         ctx.projectId = await this.resolveProjectId(ctx);
 
         const projectDefaults = this.resolveProjectDefaults(ctx);
@@ -133,10 +146,9 @@ export class MrxCommand extends BaseCommand {
           projectDefaults?.reviewerId;
         ctx.reviewerIds = this.resolveReviewerIds(ctx);
 
-        const repo = ctx.args.options.get("repo");
         ctx.source = ctx.args.options.get("source")?.trim();
         if (!ctx.source) {
-          ctx.source = await this.inferGitBranch(repo);
+          ctx.source = await this.inferGitBranch(ctx.repo);
         }
         ctx.target =
           ctx.args.options.get("target") ||
@@ -156,9 +168,13 @@ export class MrxCommand extends BaseCommand {
         ctx.commentInput = await this.resolveCommentInput(
           ctx.args,
           ctx.target,
-          ctx.args.options.get("repo") || process.cwd(),
+          ctx.repo,
         );
 
+        return next();
+      })
+      .use(async (ctx, next) => {
+        await this.prepareSourceBranchForMergeRequest(ctx);
         return next();
       })
       .use(withGitLabService())
@@ -355,10 +371,20 @@ export class MrxCommand extends BaseCommand {
                 bugId: ctx.bugId,
                 comment: "(would post reason/solution)",
                 includeLocalImages: ctx.includeLocalImages,
+                autoCommitHash: ctx.autoCommitHash,
+                autoCommitMessage: ctx.autoCommitMessage,
+                wouldCommitCurrentChanges: ctx.wouldCommitCurrentChanges,
+                push: {
+                  enabled: ctx.pushSource,
+                  remote: ctx.pushRemote,
+                  commitCount: ctx.pushCommitCount,
+                  skippedReason: ctx.pushSkippedReason,
+                },
               },
               message: `[DRY-RUN] Would create MR and comment CDP bug ${ctx.bugId}`,
               meta: {
                 dryRun: true,
+                pushCommitCount: ctx.pushCommitCount,
               },
             };
           }
@@ -399,6 +425,18 @@ export class MrxCommand extends BaseCommand {
           };
 
           const messageLines = [`Created MR !${mr.iid}: ${mr.title}`];
+          if (ctx.autoCommitHash) {
+            messageLines.push(
+              `Committed current changes ${ctx.autoCommitHash}: ${ctx.autoCommitMessage}`,
+            );
+          }
+          if (ctx.pushedSource) {
+            messageLines.push(
+              `Pushed ${ctx.source} to ${ctx.pushRemote} (${ctx.pushCommitCount ?? 0} local commits)`,
+            );
+          } else if (ctx.pushSource && ctx.pushSkippedReason) {
+            messageLines.push(`WARNING: Source branch not pushed (${ctx.pushSkippedReason})`);
+          }
           if (commentOk) {
             messageLines.push(`Commented CDP bug ${ctx.bugId}`);
           } else if (ctx.commentError) {
@@ -418,6 +456,10 @@ export class MrxCommand extends BaseCommand {
               mrUrl: mr.webUrl,
               bugId: ctx.bugId,
               commentCreated: commentOk,
+              pushedSource: ctx.pushedSource,
+              pushCommitCount: ctx.pushCommitCount,
+              autoCommitHash: ctx.autoCommitHash,
+              autoCommitMessage: ctx.autoCommitMessage,
             },
           };
         }),
@@ -453,6 +495,14 @@ export class MrxCommand extends BaseCommand {
     help +=
       "  --project <id|group/repo> Project ID (default: infer from git origin remote)\n";
     help +=
+      "  --no-push              Do not push the local source branch before creating the MR\n";
+    help +=
+      "  --push-remote <name>   Remote to push source branch to (default: origin)\n";
+    help +=
+      "  --commit-message <m>   Commit message when auto-committing current changes (default: agent-generated)\n";
+    help +=
+      "  --no-commit-current    Do not auto-commit dirty working tree changes\n";
+    help +=
       "  --dry-run               Validate parameters without creating MR/comment\n\n";
     help += "Options (CDP Comment):\n";
     help +=
@@ -465,7 +515,7 @@ export class MrxCommand extends BaseCommand {
     help +=
       "  --solution <text>       Solution (auto-generated if agent enabled, also used for MR '修改描述')\n";
     help +=
-      "  --agent <name>          Use specific AI agent to generate reason/solution\n";
+      "  --agent <name>          Use specific AI agent for generated comment/commit message\n";
     help +=
       "  --repo <path>           Working directory for AI agent (default: current dir)\n";
     help +=
@@ -490,6 +540,240 @@ export class MrxCommand extends BaseCommand {
       return;
     }
     console.log(formatted);
+  }
+
+  private async prepareSourceBranchForMergeRequest(
+    ctx: MrxChainContext,
+  ): Promise<void> {
+    if (!ctx.pushSource) {
+      ctx.pushSkippedReason = "disabled by --no-push";
+      return;
+    }
+
+    if (!ctx.source || !ctx.repo) {
+      ctx.pushSkippedReason = "missing source branch or repo";
+      return;
+    }
+
+    if (!(await this.isInsideGitWorkTree(ctx.repo))) {
+      ctx.pushSkippedReason = "repo is not a git worktree";
+      return;
+    }
+
+    const currentBranch = await this.tryInferGitBranch(ctx.repo);
+    await this.commitCurrentChangesIfNeeded(ctx, currentBranch);
+
+    const sourceRef =
+      currentBranch === ctx.source
+        ? "HEAD"
+        : (await this.refExists(ctx.repo, ctx.source))
+          ? ctx.source
+          : undefined;
+
+    if (!sourceRef) {
+      ctx.pushSkippedReason = `source branch ${ctx.source} is not available locally`;
+      return;
+    }
+
+    ctx.pushCommitCount = await this.countLocalCommitsToPush(ctx, sourceRef);
+    if (ctx.dryRun && ctx.wouldCommitCurrentChanges) {
+      ctx.pushCommitCount = (ctx.pushCommitCount ?? 0) + 1;
+    }
+
+    if (ctx.dryRun) {
+      return;
+    }
+
+    const remote = ctx.pushRemote || "origin";
+    await this.git(
+      ["push", "-u", remote, `${sourceRef}:refs/heads/${ctx.source}`],
+      ctx.repo,
+    );
+    ctx.pushedSource = true;
+
+    if (ctx.system) {
+      try {
+        await ctx.system.appendCommandLog(
+          `mrx pushed remote=${remote} source=${ctx.source} commits=${ctx.pushCommitCount ?? "unknown"}`,
+        );
+      } catch {
+        // Ignore logging failures.
+      }
+    }
+  }
+
+  private async commitCurrentChangesIfNeeded(
+    ctx: MrxChainContext,
+    currentBranch?: string,
+  ): Promise<void> {
+    if (!ctx.repo) {
+      return;
+    }
+
+    const status = await this.git(["status", "--porcelain"], ctx.repo);
+    if (!status.stdout.trim()) {
+      return;
+    }
+
+    if (!currentBranch || currentBranch !== ctx.source) {
+      throw new ValidationError(
+        "Working tree has uncommitted changes, but --source is not the checked-out branch. " +
+          "Commit/stash the changes yourself or run mrx from the source branch.",
+      );
+    }
+
+    if (ctx.args.flags.has("no-commit-current")) {
+      throw new ValidationError(
+        "Working tree has uncommitted changes. Commit/stash them, or omit --no-commit-current to let mrx commit them.",
+      );
+    }
+
+    const message = await this.resolveAutoCommitMessage(ctx);
+
+    if (ctx.dryRun) {
+      ctx.wouldCommitCurrentChanges = true;
+      ctx.autoCommitMessage = message;
+      return;
+    }
+
+    await this.git(["add", "-A"], ctx.repo);
+    const cachedDiff = await this.git(
+      ["diff", "--cached", "--quiet"],
+      ctx.repo,
+      [0, 1],
+    );
+    if (cachedDiff.exitCode === 0) {
+      return;
+    }
+
+    await this.git(["commit", "-m", message], ctx.repo);
+    const hash = await this.git(["rev-parse", "--short", "HEAD"], ctx.repo);
+    ctx.autoCommitHash = hash.stdout.trim();
+    ctx.autoCommitMessage = message;
+
+    if (ctx.system) {
+      try {
+        await ctx.system.appendCommandLog(
+          `mrx committed hash=${ctx.autoCommitHash} message=${message}`,
+        );
+      } catch {
+        // Ignore logging failures.
+      }
+    }
+  }
+
+  private async countLocalCommitsToPush(
+    ctx: MrxChainContext,
+    sourceRef: string,
+  ): Promise<number | undefined> {
+    const remote = ctx.pushRemote || "origin";
+    const remoteRef = `${remote}/${ctx.source}`;
+    if (ctx.source && (await this.refExists(ctx.repo!, remoteRef))) {
+      return this.countCommitsBetween(ctx.repo!, remoteRef, sourceRef);
+    }
+
+    const targetRef = ctx.target
+      ? await this.resolveTargetRef(ctx.repo!, ctx.target)
+      : undefined;
+    if (targetRef) {
+      return this.countCommitsBetween(ctx.repo!, targetRef, sourceRef);
+    }
+
+    return undefined;
+  }
+
+  private async countCommitsBetween(
+    cwd: string,
+    baseRef: string,
+    headRef: string,
+  ): Promise<number> {
+    const result = await this.git(
+      ["rev-list", "--count", `${baseRef}..${headRef}`],
+      cwd,
+    );
+    const parsed = Number.parseInt(result.stdout.trim(), 10);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  private async resolveTargetRef(
+    cwd: string,
+    target: string,
+  ): Promise<string | undefined> {
+    const candidates = [target, `origin/${target}`, `upstream/${target}`];
+    for (const candidate of candidates) {
+      if (await this.refExists(cwd, candidate)) {
+        return candidate;
+      }
+    }
+    return undefined;
+  }
+
+  private async refExists(cwd: string, ref: string): Promise<boolean> {
+    const result = await this.git(
+      ["rev-parse", "--verify", `${ref}^{commit}`],
+      cwd,
+      [0, 1],
+    );
+    return result.exitCode === 0;
+  }
+
+  private async isInsideGitWorkTree(cwd: string): Promise<boolean> {
+    const result = await this.git(
+      ["rev-parse", "--is-inside-work-tree"],
+      cwd,
+      [0, 1],
+    );
+    return result.exitCode === 0 && result.stdout.trim() === "true";
+  }
+
+  private async tryInferGitBranch(cwd: string): Promise<string | undefined> {
+    try {
+      return await this.inferGitBranch(cwd);
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async resolveAutoCommitMessage(
+    ctx: MrxChainContext,
+  ): Promise<string> {
+    const explicit = ctx.args.options.get("commit-message")?.trim();
+    if (explicit) {
+      return explicit;
+    }
+
+    if (ctx.args.flags.has("no-ai")) {
+      throw new ValidationError(
+        "Auto-committing current changes requires --commit-message because --no-ai disables agent commit-message generation.",
+      );
+    }
+
+    const generated = await generateCommitMessage({
+      agentName: ctx.args.options.get("agent"),
+      repo: ctx.repo,
+    });
+    const message = this.normalizeCommitMessage(generated.message);
+    if (message) {
+      return message;
+    }
+
+    throw new ValidationError(
+      "Unable to generate a commit message with the configured agent. Provide --commit-message or use --no-commit-current.",
+    );
+  }
+
+  private normalizeCommitMessage(message: string): string {
+    const normalized = message
+      .replace(/\r\n/g, "\n")
+      .split("\n")
+      .map((line) => line.trim())
+      .find((line) => line.length > 0);
+    if (!normalized) {
+      return "";
+    }
+    return this.truncateTitle(
+      normalized.replace(/^['"`]+|['"`]+$/g, "").trim(),
+    );
   }
 
   private async inferGitBranch(cwd?: string): Promise<string> {
@@ -539,10 +823,11 @@ export class MrxCommand extends BaseCommand {
 
   private async inferGitProjectOrThrow(
     expectedGitLabHost?: string,
+    cwd?: string,
   ): Promise<GitProjectRef> {
     let remote: string;
     try {
-      remote = await this.inferGitOriginUrl();
+      remote = await this.inferGitOriginUrl(cwd);
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       throw new ValidationError(
@@ -570,24 +855,30 @@ export class MrxCommand extends BaseCommand {
 
   private async tryInferGitProject(
     expectedGitLabHost?: string,
+    cwd?: string,
   ): Promise<GitProjectRef | null> {
     try {
-      return await this.inferGitProjectOrThrow(expectedGitLabHost);
+      return await this.inferGitProjectOrThrow(expectedGitLabHost, cwd);
     } catch {
       return null;
     }
   }
 
-  private async inferGitOriginUrl(): Promise<string> {
+  private async inferGitOriginUrl(cwd?: string): Promise<string> {
     const tryExec = (args: string[]) =>
       new Promise<string>((resolve, reject) => {
-        execFile("git", args, { cwd: process.cwd() }, (err, stdout, stderr) => {
-          if (err) {
-            reject(new Error(String(stderr || err.message)));
-            return;
-          }
-          resolve(String(stdout ?? "").trim());
-        });
+        execFile(
+          "git",
+          args,
+          { cwd: cwd || process.cwd() },
+          (err, stdout, stderr) => {
+            if (err) {
+              reject(new Error(String(stderr || err.message)));
+              return;
+            }
+            resolve(String(stdout ?? "").trim());
+          },
+        );
       });
 
     try {
@@ -765,7 +1056,7 @@ export class MrxCommand extends BaseCommand {
     return { reason: first, solution: rest };
   }
 
-  private async resolveBugId(args: ParsedArgs): Promise<string> {
+  private async resolveBugId(args: ParsedArgs, cwd?: string): Promise<string> {
     const explicit = (
       args.options.get("bug-id") || args.options.get("bug")
     )?.trim();
@@ -774,7 +1065,7 @@ export class MrxCommand extends BaseCommand {
     }
 
     try {
-      const branch = await this.inferGitBranch();
+      const branch = await this.inferGitBranch(cwd);
       const match = /(?:^|.*)-(1\d{7})$/.exec(branch);
       const inferred = match?.[1]?.trim();
       if (inferred) {
@@ -795,8 +1086,8 @@ export class MrxCommand extends BaseCommand {
 
     const needsGitProject = !explicitProject && !defaultProject;
     const gitProject = needsGitProject
-      ? await this.inferGitProjectOrThrow(ctx.config?.gitlab.host)
-      : await this.tryInferGitProject(ctx.config?.gitlab.host);
+      ? await this.inferGitProjectOrThrow(ctx.config?.gitlab.host, ctx.repo)
+      : await this.tryInferGitProject(ctx.config?.gitlab.host, ctx.repo);
 
     ctx.gitProject = gitProject ?? undefined;
 
@@ -858,5 +1149,42 @@ export class MrxCommand extends BaseCommand {
   private resolveRawDescription(description: string | undefined): string {
     const trimmed = (description ?? "").trim();
     return trimmed.length > 0 ? (description ?? trimmed) : DESCRIPTION_TEMPLATE;
+  }
+
+  private truncateTitle(title: string): string {
+    const trimmed = title.trim();
+    if (trimmed.length <= 120) {
+      return trimmed;
+    }
+    return `${trimmed.slice(0, 117).trimEnd()}...`;
+  }
+
+  private async git(
+    args: string[],
+    cwd: string,
+    allowedExitCodes: number[] = [0],
+  ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+    return await new Promise((resolve, reject) => {
+      execFile(
+        "git",
+        args,
+        { cwd, maxBuffer: 1024 * 1024 * 10 },
+        (error, stdout, stderr) => {
+          const errorCode = error?.code;
+          const exitCode = typeof errorCode === "number" ? errorCode : 0;
+
+          if (error && !allowedExitCodes.includes(exitCode)) {
+            reject(new Error(String(stderr || error.message)));
+            return;
+          }
+
+          resolve({
+            stdout: String(stdout ?? ""),
+            stderr: String(stderr ?? ""),
+            exitCode,
+          });
+        },
+      );
+    });
   }
 }

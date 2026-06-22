@@ -1,6 +1,6 @@
 # Mr-Rocket Command Reference
 
-Use `bun run cli <command>` inside the Mr-Rocket source repo. Use `mr-rocket <command>` if the binary is installed.
+Use `mr-rocket <command>` when Mr-Rocket CLI is installed on `PATH`. Use `bun run cli <command>` only as a local development fallback inside the Mr-Rocket source repo.
 
 ## Merge Requests
 
@@ -8,7 +8,7 @@ Use `bun run cli <command>` inside the Mr-Rocket source repo. Use `mr-rocket <co
 
 - Purpose: list GitLab merge requests.
 - Useful options: `--state opened|closed|merged`, `--search <term>`, `--labels <l1,l2>`, `--author <id>`, `--assignee <id>`, `--project <id>`, `--json`.
-- Example: `bun run cli mr list --state opened --labels "bug" --json`.
+- Example: `mr-rocket mr list --state opened --labels "bug" --json`.
 
 `mr show <mr-iid>`
 
@@ -56,10 +56,11 @@ Use `bun run cli <command>` inside the Mr-Rocket source repo. Use `mr-rocket <co
 `mrx`
 
 - Purpose: create a GitLab MR and post a CDP bug comment.
-- MR options: `--source <branch>`, `--target <branch>`, `--title <title>`, `--description <text>`, `--labels <l1,l2>`, `--assignee-id <id>`, `--reviewer-id <id>`, `--reviewer-ids <ids>`, `--project <id|group/repo>`, `--dry-run`.
+- MR options: `--source <branch>`, `--target <branch>`, `--title <title>`, `--description <text>`, `--labels <l1,l2>`, `--assignee-id <id>`, `--reviewer-id <id>`, `--reviewer-ids <ids>`, `--project <id|group/repo>`, `--commit-message <text>`, `--no-commit-current`, `--no-push`, `--push-remote <name>`, `--dry-run`.
 - CDP comment options: `--bug-id <id>`, `--comment <text>`, `--comment-file <path>`, `--reason <text>`, `--solution <text>`, `--agent <name>`, `--repo <path>`, `--no-ai`, `--no-local-images`.
 - Description template placeholders: `{{cdpLink}}`, `{{selfTestResults}}`, `{{utScreenshots}}`, `{{e2eScreenshots}}`, `{{solution}}`, `{{backendDependency}}`.
 - Inference: branch from current git branch, bug ID from branch suffix like `abc-10476866`, project from `origin` or config.
+- Auto-commit: dirty current-branch changes use `--commit-message` if provided; otherwise `mrx` asks the configured agent to generate the message.
 
 ## Wiki
 
