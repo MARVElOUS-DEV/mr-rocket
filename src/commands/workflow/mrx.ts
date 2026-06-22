@@ -734,9 +734,9 @@ export class MrxCommand extends BaseCommand {
   private async generateCommentWithAi(
     agentName?: string,
     target?: string,
-    cwd?: string,
+    repo?: string,
   ): Promise<CommentInput> {
-    return generateComment({ agentName, target, cwd });
+    return generateComment({ agentName, target, repo });
   }
 
   private parseCommentText(input: string): CommentInput {

@@ -30,7 +30,7 @@ export class AgentRunCommand extends BaseCommand {
     }
 
     const agentName = args.options.get("agent");
-    const result = await agentService.run(prompt, agentName);
+    const result = await agentService.run(prompt, { agentName });
 
     return {
       success: result.exitCode === 0,

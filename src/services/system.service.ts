@@ -1,6 +1,7 @@
 import { appendFile, mkdir } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { logger } from "../core/logger";
 
 export class SystemService {
   private baseDir: string;
@@ -16,5 +17,6 @@ export class SystemService {
     const line = `${new Date().toISOString()} ${entry}\n`;
     const filePath = join(this.logsDir, "commands.log");
     await appendFile(filePath, line, "utf-8");
+    logger.debug(`command ${entry}`);
   }
 }

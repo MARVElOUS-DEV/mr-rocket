@@ -1,7 +1,6 @@
-import { appendFile, mkdir } from "node:fs/promises";
+import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import { existsSync } from "node:fs";
 
 export enum LogLevel {
   DEBUG = 0,
@@ -21,13 +20,11 @@ export class Logger {
     this.ensureLogDir();
   }
 
-  private async ensureLogDir(): Promise<void> {
-    if (!existsSync(LOG_DIR)) {
-      try {
-        await mkdir(LOG_DIR, { recursive: true });
-      } catch (err) {
-        process.stderr.write("");
-      }
+  private ensureLogDir(): void {
+    try {
+      mkdirSync(LOG_DIR, { recursive: true });
+    } catch {
+      process.stderr.write("");
     }
   }
 
@@ -39,15 +36,16 @@ export class Logger {
     this.logToFile = enable;
   }
 
-  private async writeLog(level: string, message: string, meta?: unknown): Promise<void> {
+  private writeLog(level: string, message: string, meta?: unknown): void {
     const timestamp = new Date().toLocaleString();
     const metaStr = meta ? ` ${JSON.stringify(meta, null, 2)}` : "";
     const logEntry = `[${timestamp}] [${level}] ${message}${metaStr}\n`;
 
     if (this.logToFile) {
       try {
-        await appendFile(LOG_FILE, logEntry, "utf-8");
-      } catch (err) {
+        this.ensureLogDir();
+        appendFileSync(LOG_FILE, logEntry, "utf-8");
+      } catch {
         process.stderr.write("");
       }
     }
