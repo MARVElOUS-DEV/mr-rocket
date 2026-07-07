@@ -19,6 +19,8 @@ import { BugImagesCommand } from "./commands/bug/images";
 import { MrxCommand } from "./commands/workflow/mrx";
 import { AgentRunCommand } from "./commands/agent/run";
 import { AgentListCommand } from "./commands/agent/list";
+import { VersionCommand } from "./commands/system/version";
+import { APP_NAME, APP_VERSION, formatVersion } from "./version";
 
 async function main() {
   const parsed = cliParser.parse(process.argv);
@@ -30,7 +32,8 @@ async function main() {
   if (parsed.positional[0] === "ui" || parsed.positional[0] === "tui") {
     const { spawn } = await import("node:child_process");
     const tuiEntry = fileURLToPath(new URL("./index.tsx", import.meta.url));
-    const child = spawn("bun", ["run", tuiEntry], {
+    const tuiArgs = process.argv.slice(3);
+    const child = spawn("bun", ["run", tuiEntry, ...tuiArgs], {
       stdio: "inherit",
       shell: true,
     });
@@ -52,6 +55,24 @@ async function main() {
     }
 
     process.exit(0);
+  }
+
+  if (
+    parsed.flags.get("version") ||
+    parsed.flags.get("V") ||
+    (parsed.positional[0] === "version" && !parsed.help)
+  ) {
+    if (parsed.json) {
+      console.log(JSON.stringify({ name: APP_NAME, version: APP_VERSION }, null, 2));
+    } else {
+      console.log(formatVersion());
+    }
+    process.exit(0);
+  }
+
+  if (parsed.positional[0] === "version") {
+    const success = await commandRegistry.execute(parsed);
+    process.exit(success ? 0 : 1);
   }
 
   if (parsed.positional.length === 0) {
@@ -91,6 +112,7 @@ commandRegistry.register(new MrApproveCommand());
 commandRegistry.register(new MrMergeCommand());
 commandRegistry.register(new MrShowCommand());
 commandRegistry.register(new LogsCommand());
+commandRegistry.register(new VersionCommand());
 commandRegistry.register(new WikiSearchCommand());
 commandRegistry.register(new WikiReadCommand());
 commandRegistry.register(new CDPStatusCommand());

@@ -1,6 +1,7 @@
 import { TextAttributes } from "@opentui/core";
 import { useTerminalDimensions } from "@opentui/react";
 import { useEffect, useMemo, useState } from "react";
+import { APP_VERSION } from "../../version.js";
 
 const MENU_ITEMS = [
   { key: "m", label: "View Merge Requests" },
@@ -55,6 +56,7 @@ export function Dashboard() {
         {tagline}
         {dots}
       </text>
+      <text attributes={TextAttributes.DIM}>v{APP_VERSION}</text>
 
       <box
         width={panelWidth}

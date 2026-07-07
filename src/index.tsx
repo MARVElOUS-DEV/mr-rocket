@@ -13,6 +13,19 @@ import { HistoryList } from "./tui/components/history-list.js";
 import { WikiSearch } from "./tui/components/wiki-search.js";
 import { Toast } from "./tui/components/toast.js";
 import type { AppState } from "./types/tui.js";
+import { cliParser } from "./utils/cli-parser.js";
+import { APP_NAME, APP_VERSION, formatVersion } from "./version.js";
+
+const parsed = cliParser.parse(process.argv);
+
+if (parsed.flags.get("version") || parsed.flags.get("V") || parsed.positional[0] === "version") {
+  if (parsed.json) {
+    console.log(JSON.stringify({ name: APP_NAME, version: APP_VERSION }, null, 2));
+  } else {
+    console.log(formatVersion());
+  }
+  process.exit(0);
+}
 
 function App() {
   const store = getStore();

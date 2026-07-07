@@ -712,7 +712,7 @@ export class MrxCommand extends BaseCommand {
     const result = await this.git(
       ["rev-parse", "--verify", `${ref}^{commit}`],
       cwd,
-      [0, 1],
+      [0, 1, 128],
     );
     return result.exitCode === 0;
   }

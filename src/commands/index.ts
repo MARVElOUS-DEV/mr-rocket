@@ -127,6 +127,7 @@ class CommandRegistry {
 
     console.log("\nGlobal Options:");
     console.log("  --json               Output JSON format");
+    console.log("  --version, -V        Show version");
     console.log("  --help, -h           Show help for command\n");
   }
 

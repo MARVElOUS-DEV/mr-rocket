@@ -520,7 +520,7 @@ export class MrCreateCommand extends BaseCommand {
   }
 
   private async refExists(ref: string): Promise<boolean> {
-    const result = await this.git(["rev-parse", "--verify", `${ref}^{commit}`], [0, 1]);
+    const result = await this.git(["rev-parse", "--verify", `${ref}^{commit}`], [0, 1, 128]);
     return result.exitCode === 0;
   }
 
