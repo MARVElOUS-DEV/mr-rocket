@@ -19,6 +19,7 @@ export type Screen =
   | "bug-comment"
   | "bug-attach"
   | "wiki-search"
+  | "image-generate"
   | "history";
 
 export interface AppState {

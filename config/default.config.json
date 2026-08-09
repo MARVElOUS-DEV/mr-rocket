@@ -15,6 +15,30 @@
     "token": "YOUR_CONFLUENCE_PAT_HERE",
     "defaultSpaceKey": ""
   },
+  "agents": {
+    "cursor": {
+      "command": "cursor-agent",
+      "args": ["--print", "--trust"]
+    },
+    "codex": {
+      "command": "codex",
+      "subcommand": "exec",
+      "args": ["--disable", "plugins"]
+    },
+    "agy": {
+      "command": "agy",
+      "args": [
+        "--dangerously-skip-permissions",
+        "--print"
+      ]
+    }
+  },
+  "imageGeneration": {
+    "mainAgent": "codex",
+    "drawAgent": "agy",
+    "maxIterations": 30,
+    "outputDir": "~/.mr-rocket/generated-images"
+  },
   "ui": {
     "refreshInterval": 10000,
     "maxHistoryItems": 1000

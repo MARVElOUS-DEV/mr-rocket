@@ -1,10 +1,12 @@
 import type { AgentsConfig } from "./agent";
+import type { ImageGenerationConfig } from "./image-workflow";
 
 export interface AppConfig extends AgentsConfig {
   version: string;
   gitlab: GitLabConfig;
   confluence: ConfluenceConfig;
   cdp?: CDPConfig;
+  imageGeneration?: ImageGenerationConfig;
   ui: UIConfig;
 }
 
@@ -94,6 +96,30 @@ export const DEFAULT_CONFIG: AppConfig = {
       rejectUnauthorized: true,
       caFile: "",
     },
+  },
+  agents: {
+    cursor: {
+      command: "cursor-agent",
+      args: ["--print", "--trust"],
+    },
+    codex: {
+      command: "codex",
+      subcommand: "exec",
+      args: ["--disable", "plugins"],
+    },
+    agy: {
+      command: "agy",
+      args: [
+        "--dangerously-skip-permissions",
+        "--print",
+      ],
+    },
+  },
+  imageGeneration: {
+    mainAgent: "codex",
+    drawAgent: "agy",
+    maxIterations: 3,
+    outputDir: "~/.mr-rocket/generated-images",
   },
   ui: {
     refreshInterval: 10000,

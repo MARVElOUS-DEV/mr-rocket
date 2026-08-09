@@ -20,6 +20,7 @@ import { MrxCommand } from "./commands/workflow/mrx";
 import { AgentRunCommand } from "./commands/agent/run";
 import { AgentListCommand } from "./commands/agent/list";
 import { VersionCommand } from "./commands/system/version";
+import { ImageGenerateCommand } from "./commands/image/generate";
 import { APP_NAME, APP_VERSION, formatVersion } from "./version";
 
 async function main() {
@@ -123,5 +124,6 @@ commandRegistry.register(new BugImagesCommand());
 commandRegistry.register(new MrxCommand());
 commandRegistry.register(new AgentRunCommand());
 commandRegistry.register(new AgentListCommand());
+commandRegistry.register(new ImageGenerateCommand());
 
 main();

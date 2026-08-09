@@ -10,6 +10,7 @@ An extensible CLI/TUI tool for daily workflow automation with GitLab integration
 - **Colored output**: Human-readable terminal output with color-coded messages
 - **JSON mode**: Scriptable output with `--json` flag
 - **Config management**: Single config file at `~/.mr-rocket/config.json`
+- **Image workflow**: Prompt refinement, reference images, generation, visual review, iterative fixes, and cancellation
 
 ## Installation
 
@@ -42,8 +43,19 @@ On first run, a default config will be created at `~/.mr-rocket/config.json`:
   },
   "agents": {
     "claude": { "command": "claude", "args": ["--print"], "enabled": true },
-    "codex": { "command": "codex", "subcommand": "exec" },
+    "codex": { "command": "codex", "subcommand": "exec", "args": ["--disable", "plugins"] },
+    "cursor": { "command": "cursor-agent", "args": ["--print", "--trust"] },
+    "agy": {
+      "command": "agy",
+      "args": ["--dangerously-skip-permissions", "--print"]
+    },
     "gemini": { "command": "gemini", "args": ["-p"] }
+  },
+  "imageGeneration": {
+    "mainAgent": "codex",
+    "drawAgent": "agy",
+    "maxIterations": 3,
+    "outputDir": "~/.mr-rocket/generated-images"
   },
   "ui": {
     "refreshInterval": 10000,
@@ -77,6 +89,9 @@ bun run cli mr list --state opened
 # List with JSON output for scripting
 bun run cli mr list --state opened --json
 
+# Generate, review, and refine an image
+bun run cli image generate "Realistic portrait in rainy Shanghai" --reference ./mood.jpg
+
 # Approve a merge request
 bun run cli mr approve 45 --message "LGTM"
 
@@ -93,12 +108,35 @@ bun run cli issue create --title "Bug found" --labels "bug,critical"
 bun run cli issue list --state opened
 ```
 
-### TUI Mode (Interactive - Coming Soon)
+### TUI Mode
 
 ```bash
 # Launch TUI interface
 bun run tui
 ```
+
+Press `g` to open Image Studio. Enter a prompt and optional reference-image paths, then press `Ctrl+G`. The phase log updates while the main and drawing agents work. Each run streams its complete transcript to a private file under `~/.mr-rocket/logs/`; use `tail -F ~/.mr-rocket/logs/image-workflow-current.log` to follow it externally, or `Ctrl+L` to reveal the path in the TUI. `Esc` or `Ctrl+C` cancels the active agent and workflow.
+
+Agents can be local processes (the default transport) or remote HTTP endpoints:
+
+```json
+{
+  "agents": {
+    "remote-draw": {
+      "transport": "http",
+      "url": "https://agents.example.com/generate",
+      "headers": { "authorization": "Bearer YOUR_TOKEN" },
+      "timeoutMs": 600000
+    }
+  }
+}
+```
+
+HTTP agents receive `{ "prompt": string, "attachments": [{ "name", "mimeType", "data" }] }`, where `data` is base64. They return `{ "output": string, "artifacts"?: [{ "name", "data"?: base64, "url"?: string }] }`. Local drawing agents write images into the requested output directory and return `{"images":["/absolute/path.png"]}`.
+
+The drawing agent must be authenticated and provide an image-generation tool. Mr-Rocket launches it from the configured image output root, so that single folder can be trusted once regardless of where Mr-Rocket is started. For the default path, run `mkdir -p ~/.mr-rocket/generated-images && cd ~/.mr-rocket/generated-images && agy`, sign in, trust the folder, then exit. Agy needs `--dangerously-skip-permissions` because print mode cannot display tool approval prompts; this grants the drawing agent broad host access. Keep `--print` last because it consumes the next argument as its prompt. Add `"--agent", "<draw-capable-agent>"` before `--print` when an explicit drawing agent is required.
+
+Mr-Rocket runs Codex with `--disable plugins`, keeping plugin-provided skills such as Ponytail out of workflow planning and review without changing normal Codex sessions.
 
 ## Commands
 

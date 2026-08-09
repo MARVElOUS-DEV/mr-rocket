@@ -12,6 +12,7 @@ import { BugAttach } from "./tui/components/bug-attach.js";
 import { HistoryList } from "./tui/components/history-list.js";
 import { WikiSearch } from "./tui/components/wiki-search.js";
 import { Toast } from "./tui/components/toast.js";
+import { ImageGenerate } from "./tui/components/image-generate.js";
 import type { AppState } from "./types/tui.js";
 import { cliParser } from "./utils/cli-parser.js";
 import { APP_NAME, APP_VERSION, formatVersion } from "./version.js";
@@ -43,7 +44,8 @@ function App() {
       state.currentScreen === "mr-create" ||
       state.currentScreen === "bug-comment" ||
       state.currentScreen === "bug-attach" ||
-      state.currentScreen === "wiki-search"
+      state.currentScreen === "wiki-search" ||
+      state.currentScreen === "image-generate"
     ) {
       return;
     }
@@ -68,6 +70,8 @@ function App() {
       store.dispatch({ type: "NAVIGATE", screen: "wiki-search" });
     } else if (input === "a") {
       store.dispatch({ type: "NAVIGATE", screen: "bug-attach" });
+    } else if (input === "g") {
+      store.dispatch({ type: "NAVIGATE", screen: "image-generate" });
     }
   });
 
@@ -89,6 +93,8 @@ function App() {
         return <HistoryList />;
       case "wiki-search":
         return <WikiSearch />;
+      case "image-generate":
+        return <ImageGenerate />;
       default:
         return (
           <box

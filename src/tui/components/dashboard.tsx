@@ -10,6 +10,7 @@ const MENU_ITEMS = [
   { key: "n", label: "New Bug Comment" },
   { key: "a", label: "Attach Bug Image" },
   { key: "w", label: "Search Wiki" },
+  { key: "g", label: "Generate Images" },
   { key: "h", label: "View History" },
 ] as const;
 

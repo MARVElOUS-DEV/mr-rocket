@@ -27,9 +27,6 @@ export class ConfigManager {
       const merged = this.mergeConfig(parsed, DEFAULT_CONFIG);
       this.config = merged;
       this.validateConfig(this.config);
-      if (JSON.stringify(parsed) !== JSON.stringify(merged)) {
-        await this.save(merged);
-      }
       return this.config;
     } catch (err) {
       console.error(error("Failed to load config file"));
@@ -38,6 +35,14 @@ export class ConfigManager {
   }
 
   private mergeConfig(config: AppConfig, defaults: AppConfig): AppConfig {
+    const agy = {
+      ...defaults.agents!.agy!,
+      ...config.agents?.agy,
+    };
+    if (agy.transport !== "http") {
+      agy.args = [...(agy.args || []).filter((arg) => arg !== "--print"), "--print"];
+    }
+
     return {
       ...defaults,
       ...config,
@@ -65,6 +70,19 @@ export class ConfigManager {
             },
           }
         : undefined,
+      agents: {
+        ...defaults.agents,
+        ...config.agents,
+        codex: {
+          ...defaults.agents!.codex!,
+          ...config.agents?.codex,
+        },
+        agy,
+      },
+      imageGeneration: {
+        ...defaults.imageGeneration!,
+        ...config.imageGeneration,
+      },
       ui: {
         ...defaults.ui,
         ...config.ui,
@@ -82,16 +100,46 @@ export class ConfigManager {
     if (!config.gitlab.host) {
       throw new Error("GitLab host is required");
     }
-    if (!config.gitlab.token || config.gitlab.token === "YOUR_PERSONAL_ACCESS_TOKEN_HERE") {
-      throw new Error("GitLab token is not configured. Please edit ~/.mr-rocket/config.json");
-    }
-
     if (config.cdp) {
       if (!config.cdp.host) {
         throw new Error("CDP host is required if CDP section is present");
       }
-      if (config.cdp.host === "https://your-cdp-domain.com") {
-        throw new Error("CDP host is not configured. Please edit ~/.mr-rocket/config.json");
+    }
+
+    const workflow = config.imageGeneration;
+    if (workflow && (!workflow.mainAgent || !workflow.drawAgent)) {
+      throw new Error("Image generation requires mainAgent and drawAgent");
+    }
+    if (
+      workflow?.maxIterations !== undefined &&
+      (!Number.isInteger(workflow.maxIterations) ||
+        workflow.maxIterations < 1 ||
+        workflow.maxIterations > 100)
+    ) {
+      throw new Error(
+        "imageGeneration.maxIterations must be an integer from 1 to 100",
+      );
+    }
+
+    for (const [name, agent] of Object.entries(config.agents || {})) {
+      if (
+        agent.timeoutMs !== undefined &&
+        (!Number.isFinite(agent.timeoutMs) || agent.timeoutMs <= 0)
+      ) {
+        throw new Error(`Agent ${name} timeoutMs must be positive`);
+      }
+      if (agent.transport === "http") {
+        let url: URL;
+        try {
+          url = new URL(agent.url);
+        } catch {
+          throw new Error(`Agent ${name} has an invalid URL`);
+        }
+        if (url.protocol !== "http:" && url.protocol !== "https:") {
+          throw new Error(`Agent ${name} URL must use HTTP or HTTPS`);
+        }
+      } else if (!agent.command?.trim()) {
+        throw new Error(`Agent ${name} command is required`);
       }
     }
   }
