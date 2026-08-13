@@ -1,5 +1,9 @@
 import type { AgentsConfig } from "./agent";
-import type { ImageGenerationConfig } from "./image-workflow";
+import {
+  DEFAULT_IMAGE_MAX_DURATION_MS,
+  DEFAULT_IMAGE_MAX_ITERATIONS,
+  type ImageGenerationConfig,
+} from "./image-workflow";
 
 export interface AppConfig extends AgentsConfig {
   version: string;
@@ -100,25 +104,39 @@ export const DEFAULT_CONFIG: AppConfig = {
   agents: {
     cursor: {
       command: "cursor-agent",
-      args: ["--print", "--trust"],
+      timeoutMs: 20 * 60 * 1000,
+      capabilities: {
+        nonInteractiveArgs: ["--print", "--trust", "--force"],
+        workspaceArg: "--workspace",
+        resumeArgs: ["--continue"],
+        localImagePaths: true,
+        output: {
+          protocol: "json-lines",
+          args: ["--output-format", "stream-json", "--stream-partial-output"],
+        },
+      },
     },
     codex: {
       command: "codex",
       subcommand: "exec",
       args: ["--disable", "plugins"],
+      capabilities: {
+        localImagePaths: true,
+      },
     },
     agy: {
       command: "agy",
-      args: [
-        "--dangerously-skip-permissions",
-        "--print",
-      ],
+      capabilities: {
+        nonInteractiveArgs: ["--dangerously-skip-permissions", "--print"],
+        localImagePaths: true,
+      },
     },
   },
   imageGeneration: {
     mainAgent: "codex",
     drawAgent: "agy",
-    maxIterations: 3,
+    maxIterations: DEFAULT_IMAGE_MAX_ITERATIONS,
+    maxDurationMs: DEFAULT_IMAGE_MAX_DURATION_MS,
     outputDir: "~/.mr-rocket/generated-images",
   },
   ui: {

@@ -517,7 +517,7 @@ export class MrxCommand extends BaseCommand {
     help +=
       "  --agent <name>          Use specific AI agent for generated comment/commit message\n";
     help +=
-      "  --repo <path>           Working directory for AI agent (default: current dir)\n";
+      "  --repo <path>           Repository for git inference and AI agent (default: current dir)\n";
     help +=
       "  --no-ai                 Disable AI auto-generation even if agent is enabled\n";
     help +=
@@ -721,7 +721,7 @@ export class MrxCommand extends BaseCommand {
     const result = await this.git(
       ["rev-parse", "--is-inside-work-tree"],
       cwd,
-      [0, 1],
+      [0, 1, 128],
     );
     return result.exitCode === 0 && result.stdout.trim() === "true";
   }
@@ -1007,15 +1007,13 @@ export class MrxCommand extends BaseCommand {
       }
     }
 
-    if (!resolved.solution) {
+    const missingFields = [
+      !resolved.reason ? "--reason" : undefined,
+      !resolved.solution ? "--solution" : undefined,
+    ].filter((field): field is string => field !== undefined);
+    if (missingFields.length > 0) {
       throw new ValidationError(
-        "CDP comment requires --solution. Enable AI agent in config or use --agent <name> to auto-generate.",
-      );
-    }
-
-    if (!resolved.reason) {
-      throw new ValidationError(
-        "CDP comment requires --reason. Enable AI agent in config or use --agent <name> to auto-generate.",
+        `CDP comment requires ${missingFields.join(" and ")}. Enable AI agent in config or use --agent <name> to auto-generate.`,
       );
     }
 
@@ -1084,19 +1082,24 @@ export class MrxCommand extends BaseCommand {
     const explicitProject = ctx.args.options.get("project")?.trim();
     const defaultProject = ctx.config?.gitlab.defaultProjectId?.trim();
 
-    const needsGitProject = !explicitProject && !defaultProject;
-    const gitProject = needsGitProject
-      ? await this.inferGitProjectOrThrow(ctx.config?.gitlab.host, ctx.repo)
-      : await this.tryInferGitProject(ctx.config?.gitlab.host, ctx.repo);
+    if (explicitProject) {
+      ctx.gitProject = undefined;
+      return explicitProject;
+    }
 
+    const isGitWorkTree = ctx.repo
+      ? await this.isInsideGitWorkTree(ctx.repo)
+      : false;
+    const gitProject = isGitWorkTree
+      ? await this.inferGitProjectOrThrow(ctx.config?.gitlab.host, ctx.repo)
+      : null;
     ctx.gitProject = gitProject ?? undefined;
 
-    const resolvedProjectIdRaw =
-      explicitProject ||
-      defaultProject ||
-      (gitProject
-        ? this.resolveProjectIdFromConfigOrRemote(ctx.config, gitProject)
-        : undefined);
+    // A repository's origin is authoritative. The configured default is only
+    // a fallback when mrx is intentionally run outside a Git worktree.
+    const resolvedProjectIdRaw = gitProject
+      ? this.resolveProjectIdFromConfigOrRemote(ctx.config, gitProject)
+      : defaultProject;
 
     if (!resolvedProjectIdRaw) {
       throw new ValidationError(

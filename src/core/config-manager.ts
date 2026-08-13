@@ -2,7 +2,14 @@ import { writeFile, readFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { existsSync } from "node:fs";
+import type { AgentConfig, ProcessAgentConfig } from "../types/agent";
 import type { AppConfig } from "../types/config";
+import {
+  MAX_IMAGE_MAX_DURATION_MS,
+  MAX_IMAGE_MAX_ITERATIONS,
+  MIN_IMAGE_MAX_DURATION_MS,
+  MIN_IMAGE_MAX_ITERATIONS,
+} from "../types/image-workflow";
 import { error, success } from "../utils/colors";
 
 const CONFIG_DIR = join(homedir(), ".mr-rocket");
@@ -35,13 +42,12 @@ export class ConfigManager {
   }
 
   private mergeConfig(config: AppConfig, defaults: AppConfig): AppConfig {
-    const agy = {
-      ...defaults.agents!.agy!,
-      ...config.agents?.agy,
+    const agents = this.mergeAgents(config.agents, defaults.agents);
+
+    const imageGeneration = {
+      ...defaults.imageGeneration!,
+      ...config.imageGeneration,
     };
-    if (agy.transport !== "http") {
-      agy.args = [...(agy.args || []).filter((arg) => arg !== "--print"), "--print"];
-    }
 
     return {
       ...defaults,
@@ -71,23 +77,54 @@ export class ConfigManager {
           }
         : undefined,
       agents: {
-        ...defaults.agents,
-        ...config.agents,
-        codex: {
-          ...defaults.agents!.codex!,
-          ...config.agents?.codex,
-        },
-        agy,
+        ...agents,
       },
-      imageGeneration: {
-        ...defaults.imageGeneration!,
-        ...config.imageGeneration,
-      },
+      imageGeneration,
       ui: {
         ...defaults.ui,
         ...config.ui,
       },
     };
+  }
+
+  private mergeAgents(
+    configured: AppConfig["agents"],
+    defaults: AppConfig["agents"],
+  ): Record<string, AgentConfig> {
+    const agents: Record<string, AgentConfig> = {
+      ...(defaults || {}),
+      ...(configured || {}),
+    };
+    for (const [name, defaultAgent] of Object.entries(defaults || {})) {
+      const configuredAgent = configured?.[name];
+      if (!configuredAgent) continue;
+      if (
+        defaultAgent.transport === "http" ||
+        configuredAgent.transport === "http"
+      ) {
+        agents[name] = { ...defaultAgent, ...configuredAgent } as AgentConfig;
+        continue;
+      }
+      const defaultProcess = defaultAgent as ProcessAgentConfig;
+      const configuredProcess = configuredAgent as ProcessAgentConfig;
+      const defaultOutput = defaultProcess.capabilities?.output;
+      const configuredOutput = configuredProcess.capabilities?.output;
+      const output = configuredOutput
+        ? defaultOutput?.protocol === configuredOutput.protocol
+          ? { ...defaultOutput, ...configuredOutput }
+          : configuredOutput
+        : defaultOutput;
+      agents[name] = {
+        ...defaultProcess,
+        ...configuredProcess,
+        capabilities: {
+          ...defaultProcess.capabilities,
+          ...configuredProcess.capabilities,
+          output,
+        },
+      } as ProcessAgentConfig;
+    }
+    return agents;
   }
 
   private validateConfig(config: AppConfig): void {
@@ -113,11 +150,21 @@ export class ConfigManager {
     if (
       workflow?.maxIterations !== undefined &&
       (!Number.isInteger(workflow.maxIterations) ||
-        workflow.maxIterations < 1 ||
-        workflow.maxIterations > 100)
+        workflow.maxIterations < MIN_IMAGE_MAX_ITERATIONS ||
+        workflow.maxIterations > MAX_IMAGE_MAX_ITERATIONS)
     ) {
       throw new Error(
-        "imageGeneration.maxIterations must be an integer from 1 to 100",
+        `imageGeneration.maxIterations must be an integer from ${MIN_IMAGE_MAX_ITERATIONS} to ${MAX_IMAGE_MAX_ITERATIONS}`,
+      );
+    }
+    if (
+      workflow?.maxDurationMs !== undefined &&
+      (!Number.isFinite(workflow.maxDurationMs) ||
+        workflow.maxDurationMs < MIN_IMAGE_MAX_DURATION_MS ||
+        workflow.maxDurationMs > MAX_IMAGE_MAX_DURATION_MS)
+    ) {
+      throw new Error(
+        `imageGeneration.maxDurationMs must be from ${MIN_IMAGE_MAX_DURATION_MS} to ${MAX_IMAGE_MAX_DURATION_MS}`,
       );
     }
 
@@ -140,6 +187,39 @@ export class ConfigManager {
         }
       } else if (!agent.command?.trim()) {
         throw new Error(`Agent ${name} command is required`);
+      } else {
+        const capabilities = agent.capabilities;
+        if (
+          capabilities?.workspaceArg !== undefined &&
+          !capabilities.workspaceArg.trim()
+        ) {
+          throw new Error(`Agent ${name} workspaceArg cannot be empty`);
+        }
+        if (
+          capabilities?.output?.protocol !== undefined &&
+          capabilities.output.protocol !== "text" &&
+          capabilities.output.protocol !== "json-lines"
+        ) {
+          throw new Error(`Agent ${name} has an invalid output protocol`);
+        }
+        if (
+          capabilities?.output?.protocol === "json-lines" &&
+          (capabilities.output.resultEventType === "" ||
+            capabilities.output.resultField === "")
+        ) {
+          throw new Error(
+            `Agent ${name} JSON-lines result selectors cannot be empty`,
+          );
+        }
+        for (const [field, args] of [
+          ["nonInteractiveArgs", capabilities?.nonInteractiveArgs],
+          ["resumeArgs", capabilities?.resumeArgs],
+          ["output.args", capabilities?.output?.args],
+        ] as const) {
+          if (args?.some((arg) => !arg.trim())) {
+            throw new Error(`Agent ${name} ${field} cannot contain empty args`);
+          }
+        }
       }
     }
   }

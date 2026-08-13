@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, realpath, stat } from "node:fs/promises";
+import { mkdir, readdir, realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, relative, resolve } from "node:path";
 import { stripVTControlCharacters } from "node:util";
@@ -11,6 +11,14 @@ import type {
   ImageWorkflowInput,
   ImageWorkflowLog,
   ImageWorkflowResult,
+} from "../types/image-workflow";
+import {
+  DEFAULT_IMAGE_MAX_DURATION_MS,
+  DEFAULT_IMAGE_MAX_ITERATIONS,
+  MAX_IMAGE_MAX_DURATION_MS,
+  MAX_IMAGE_MAX_ITERATIONS,
+  MIN_IMAGE_MAX_DURATION_MS,
+  MIN_IMAGE_MAX_ITERATIONS,
 } from "../types/image-workflow";
 import { createImageWorkflowLog } from "../utils/image-workflow-log";
 
@@ -105,10 +113,51 @@ export class ImageGenerationWorkflow {
 
     const config = configManager.getConfig().imageGeneration;
     if (!config) throw new Error("imageGeneration is not configured");
-    const maxIterations = Math.max(1, config.maxIterations ?? 3);
+    const maxIterations =
+      input.maxIterations ??
+      config.maxIterations ??
+      DEFAULT_IMAGE_MAX_ITERATIONS;
+    if (
+      !Number.isInteger(maxIterations) ||
+      maxIterations < MIN_IMAGE_MAX_ITERATIONS ||
+      maxIterations > MAX_IMAGE_MAX_ITERATIONS
+    ) {
+      throw new Error(
+        `Maximum iterations must be an integer from ${MIN_IMAGE_MAX_ITERATIONS} to ${MAX_IMAGE_MAX_ITERATIONS}`,
+      );
+    }
+    const maxDurationMs =
+      input.maxDurationMs ??
+      config.maxDurationMs ??
+      DEFAULT_IMAGE_MAX_DURATION_MS;
+    if (
+      !Number.isInteger(maxDurationMs) ||
+      maxDurationMs < MIN_IMAGE_MAX_DURATION_MS ||
+      maxDurationMs > MAX_IMAGE_MAX_DURATION_MS
+    ) {
+      throw new Error("Maximum duration must be from 1 to 60 minutes");
+    }
+    const workflowStartedAt = Date.now();
+    const deadline = workflowStartedAt + maxDurationMs;
     const references = await this.validateReferences(
       input.referenceImages || [],
     );
+    if (references.includes(expandHome(prompt))) {
+      throw new Error(
+        "Image prompt must describe what to create or change; put image paths only in the reference field",
+      );
+    }
+    const drawAgentConfig =
+      configManager.getConfig().agents?.[config.drawAgent];
+    if (
+      references.length > 0 &&
+      drawAgentConfig?.transport !== "http" &&
+      drawAgentConfig?.capabilities?.localImagePaths === false
+    ) {
+      throw new Error(
+        `Draw agent ${config.drawAgent} does not support local reference image paths`,
+      );
+    }
     const root = expandHome(
       input.outputDir || config.outputDir || "~/.mr-rocket/generated-images",
     );
@@ -142,6 +191,8 @@ export class ImageGenerationWorkflow {
           `Started: ${new Date().toISOString()}`,
           `Prompt: ${prompt}`,
           `References: ${references.length ? references.join(", ") : "(none)"}`,
+          `Maximum iterations: ${maxIterations}`,
+          `Maximum duration: ${maxDurationMs}ms`,
           `Output: ${outputDir}`,
           "",
         ].join("\n"),
@@ -155,9 +206,21 @@ export class ImageGenerationWorkflow {
     const agentOptions = (
       agentName: string,
       images: string[] = references,
+      continueSession = false,
+      timeoutLimitMs?: number,
     ): RunOptions => ({
       agentName,
-      repo: agentName === config.drawAgent ? root : undefined,
+      repo: agentName === config.drawAgent ? outputDir : undefined,
+      timeoutMs: Math.max(
+        1000,
+        Math.min(
+          configManager.getConfig().agents?.[agentName]?.timeoutMs ??
+            10 * 60 * 1000,
+          timeoutLimitMs ?? deadline - Date.now(),
+          deadline - Date.now(),
+        ),
+      ),
+      continueSession,
       signal: options.signal,
       referenceImages: images,
       artifactDir: outputDir,
@@ -200,17 +263,56 @@ export class ImageGenerationWorkflow {
       let feedback: string[] = [];
       let previousImages: string[] = [];
       for (let iteration = 1; iteration <= maxIterations; iteration++) {
+        const remainingMs = deadline - Date.now();
+        if (previousImages.length > 0 && remainingMs < 3 * 60 * 1000) {
+          emit(
+            "completed",
+            `Time budget reached; returning the best candidate with ${feedback.length} review item(s) remaining`,
+            iteration - 1,
+          );
+          return {
+            images: previousImages,
+            refinedPrompt: plan.prompt,
+            checks: plan.checks,
+            iterations: iteration - 1,
+            verified: false,
+            feedback,
+            events,
+          };
+        }
         emit(
           iteration === 1 ? "generating" : "refining",
           `${config.drawAgent} is ${iteration === 1 ? "generating" : "applying review feedback"}`,
           iteration,
         );
         const drawResult = await this.runner.run(
-          this.drawPrompt(plan, feedback, outputDir, iteration),
-          agentOptions(config.drawAgent, [...references, ...previousImages]),
+          this.drawPrompt(plan, feedback, outputDir, iteration, [
+            ...references,
+            ...previousImages,
+          ]),
+          agentOptions(
+            config.drawAgent,
+            [...references, ...previousImages],
+            iteration > 1,
+            Math.max(30_000, remainingMs - 2 * 60 * 1000),
+          ),
         );
-        assertAgentSuccess(drawResult);
-        const images = await this.resolveGeneratedImages(drawResult, outputDir);
+        let images: string[];
+        if (drawResult.timedOut) {
+          images = await this.resolveGeneratedImages(
+            drawResult,
+            outputDir,
+            true,
+          );
+          emit(
+            "generating",
+            `${config.drawAgent} reached its time limit after writing ${images.length} image(s); continuing with verification`,
+            iteration,
+          );
+        } else {
+          assertAgentSuccess(drawResult);
+          images = await this.resolveGeneratedImages(drawResult, outputDir);
+        }
         previousImages = images;
         emit(
           "verifying",
@@ -238,9 +340,13 @@ export class ImageGenerationWorkflow {
             refinedPrompt: plan.prompt,
             checks: plan.checks,
             iterations: iteration,
+            verified: true,
+            feedback: [],
             events,
           };
-          liveLog?.write(images.map((image) => `IMAGE: ${image}`).join("\n") + "\n");
+          liveLog?.write(
+            images.map((image) => `IMAGE: ${image}`).join("\n") + "\n",
+          );
           return result;
         }
         feedback = review.feedback.length
@@ -248,10 +354,28 @@ export class ImageGenerationWorkflow {
           : [
               "The verification agent rejected the result without details; inspect and improve it",
             ];
+        if (iteration === maxIterations || Date.now() >= deadline) {
+          emit(
+            "completed",
+            `Returning the best candidate with ${feedback.length} review item(s) remaining`,
+            iteration,
+          );
+          const result = {
+            images: previousImages,
+            refinedPrompt: plan.prompt,
+            checks: plan.checks,
+            iterations: iteration,
+            verified: false,
+            feedback,
+            events,
+          };
+          liveLog?.write(
+            previousImages.map((image) => `IMAGE: ${image}`).join("\n") + "\n",
+          );
+          return result;
+        }
       }
-      throw new Error(
-        `Images did not pass verification after ${maxIterations} iteration(s)`,
-      );
+      throw new Error("Image workflow ended without a candidate");
     } catch (error) {
       if (
         options.signal?.aborted ||
@@ -268,11 +392,13 @@ export class ImageGenerationWorkflow {
       );
       throw error;
     } finally {
-      await liveLog?.close().catch((cause) =>
-        options.onLogError?.(
-          cause instanceof Error ? cause : new Error(String(cause)),
-        ),
-      );
+      await liveLog
+        ?.close()
+        .catch((cause) =>
+          options.onLogError?.(
+            cause instanceof Error ? cause : new Error(String(cause)),
+          ),
+        );
     }
   }
 
@@ -292,14 +418,37 @@ export class ImageGenerationWorkflow {
   private async resolveGeneratedImages(
     result: AgentResult,
     outputDir: string,
+    discoverOnMissing = false,
   ): Promise<string[]> {
     let reported: string[] = result.artifacts || [];
     if (reported.length === 0) {
-      const parsed = jsonObject(agentText(result), "images");
-      reported = stringList(parsed.images);
+      try {
+        const parsed = jsonObject(agentText(result), "images");
+        reported = stringList(parsed.images);
+      } catch (error) {
+        if (!discoverOnMissing) throw error;
+      }
     }
-    if (reported.length === 0)
+    if (reported.length === 0 && discoverOnMissing) {
+      const entries = await readdir(outputDir, { withFileTypes: true });
+      reported = entries
+        .filter(
+          (entry) =>
+            entry.isFile() &&
+            IMAGE_EXTENSIONS.has(
+              entry.name.slice(entry.name.lastIndexOf(".")).toLowerCase(),
+            ),
+        )
+        .map((entry) => resolve(outputDir, entry.name));
+    }
+    if (reported.length === 0 && result.timedOut) {
+      throw new Error(
+        `${result.agent} timed out and left no recoverable images in ${outputDir}`,
+      );
+    }
+    if (reported.length === 0) {
       throw new Error(`${result.agent} returned no images`);
+    }
 
     const realOutputDir = await realpath(outputDir);
     return Promise.all(
@@ -332,8 +481,9 @@ export class ImageGenerationWorkflow {
     feedback: string[],
     outputDir: string,
     iteration: number,
+    inputImages: string[],
   ): string {
-    return `You are the drawing agent. Generate or modify the image files now using your available tools. Do not merely describe an image. Follow the production prompt without adding unrequested copy, labels, watermarks, disclaimers, or qualifiers. For text-heavy designs, prefer deterministic SVG, HTML, or canvas layout so supplied text stays exact and legible; use image generation for the visual elements. Default to photorealistic imagery unless the production prompt requests another style. Use attached references and previous images. Write every final candidate inside this exact directory: ${outputDir}\n\nProduction prompt:\n${plan.prompt}\n\nAcceptance checks:\n${plan.checks.map((check) => `- ${check}`).join("\n")}\n\nReview feedback for iteration ${iteration}:\n${feedback.length ? feedback.map((item) => `- ${item}`).join("\n") : "None; create the first candidates."}\n\nAfter the files exist, your final response must be exactly one JSON object with absolute paths and no prose:\n{"images":["${outputDir}/image.png"]}`;
+    return `You are the drawing agent. Generate or modify the image files now using your available tools. Do not merely describe an image. Follow the production prompt without adding unrequested copy, labels, watermarks, disclaimers, or qualifiers. For text-heavy designs, prefer deterministic SVG, HTML, or canvas layout so supplied text stays exact and legible; use image generation for the visual elements. Default to photorealistic imagery unless the production prompt requests another style.\n\nAuthoritative input image paths for this run:\n${inputImages.length ? inputImages.join("\n") : "None"}\nUse only these inputs and files you create inside the output directory. Do not search for or reuse images, crops, transcripts, or artifacts from other workflow runs.\n\nWrite every final candidate inside this exact directory: ${outputDir}\nProduce a usable candidate early, keep analysis and tool setup proportionate, perform at most one final inspection, and return the JSON immediately after the image exists. Do not consume the whole agent runtime polishing a candidate; the reviewer will request another iteration when needed.\n\nProduction prompt:\n${plan.prompt}\n\nAcceptance checks:\n${plan.checks.map((check) => `- ${check}`).join("\n")}\n\nReview feedback for iteration ${iteration}:\n${feedback.length ? feedback.map((item) => `- ${item}`).join("\n") : "None; create the first candidates."}\n\nAfter the files exist, your final response must be exactly one JSON object with absolute paths and no prose:\n{"images":["${outputDir}/image.png"]}`;
   }
 
   private reviewPrompt(

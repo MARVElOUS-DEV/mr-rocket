@@ -19,6 +19,8 @@ export interface RunOptions {
   signal?: AbortSignal;
   referenceImages?: string[];
   artifactDir?: string;
+  /** Resume the latest agent session when the configured agent supports it. */
+  continueSession?: boolean;
   silent?: boolean;
   onOutput?: (chunk: string, stream: AgentOutputStream) => void;
 }
@@ -51,6 +53,28 @@ function imageMimeType(path: string): string {
     default:
       return "image/png";
   }
+}
+
+function jsonLinesResult(
+  output: string,
+  resultEventType = "result",
+  resultField = "result",
+): string | undefined {
+  const lines = output.trimEnd().split("\n");
+  for (let index = lines.length - 1; index >= 0; index--) {
+    try {
+      const event = JSON.parse(lines[index]!) as Record<string, unknown>;
+      if (
+        event.type === resultEventType &&
+        typeof event[resultField] === "string"
+      ) {
+        return event[resultField];
+      }
+    } catch {
+      // Ignore incomplete progress lines and keep looking for the final event.
+    }
+  }
+  return undefined;
 }
 
 export class AgentService {
@@ -109,11 +133,38 @@ export class AgentService {
     options: RunOptions,
   ): Promise<AgentResult> {
     const startTime = Date.now();
-    const configuredArgs = [
+    const rawBaseArgs = [
       ...(config.subcommand ? [config.subcommand] : []),
       ...(config.args || []),
     ];
+    const capabilities = config.capabilities;
+    const capabilityArgs = [
+      ...(capabilities?.nonInteractiveArgs || []),
+      ...(capabilities?.output?.args || []),
+    ];
+    // Older configs may already contain capability flags in `args`. Move them
+    // to their declared position instead of invoking the CLI with duplicates.
+    const capabilityArgSet = new Set(capabilityArgs);
+    const baseArgs = rawBaseArgs.filter((arg) => !capabilityArgSet.has(arg));
+    const workspaceArg = capabilities?.workspaceArg;
+    const hasWorkspaceArg = workspaceArg
+      ? baseArgs.some(
+          (arg) => arg === workspaceArg || arg.startsWith(`${workspaceArg}=`),
+        )
+      : false;
+    const configuredArgs = [
+      ...baseArgs,
+      ...capabilityArgs,
+      ...(workspaceArg && options.repo && !hasWorkspaceArg
+        ? [workspaceArg, options.repo]
+        : []),
+      ...(options.continueSession ? capabilities?.resumeArgs || [] : []),
+    ];
     const args = [...configuredArgs, ...(config.promptStdin ? [] : [prompt])];
+    const jsonLinesOutput =
+      capabilities?.output?.protocol === "json-lines"
+        ? capabilities.output
+        : undefined;
     const spinner = options.silent ? undefined : new Spinner();
     const timeoutMs =
       options.timeoutMs ?? config.timeoutMs ?? DEFAULT_AGENT_TIMEOUT_MS;
@@ -206,15 +257,23 @@ export class AgentService {
           stdoutLength: stdout.length,
           stderrLength: stderr.length,
         });
+        const normalizedStdout = jsonLinesOutput
+          ? jsonLinesResult(
+              stdout,
+              jsonLinesOutput.resultEventType,
+              jsonLinesOutput.resultField,
+            ) || stdout
+          : stdout;
         resolve({
           agent: name,
           output: timedOut
             ? `${name} timed out after ${timeoutMs}ms`
-            : stdout || stderr,
-          stdout,
+            : normalizedStdout || stderr,
+          stdout: normalizedStdout,
           stderr,
           exitCode,
           duration,
+          timedOut,
         });
       });
     });

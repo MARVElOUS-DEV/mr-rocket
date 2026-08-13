@@ -42,12 +42,37 @@ On first run, a default config will be created at `~/.mr-rocket/config.json`:
     "defaultSpaceKey": ""
   },
   "agents": {
-    "claude": { "command": "claude", "args": ["--print"], "enabled": true },
-    "codex": { "command": "codex", "subcommand": "exec", "args": ["--disable", "plugins"] },
-    "cursor": { "command": "cursor-agent", "args": ["--print", "--trust"] },
+    "claude": {
+      "command": "claude",
+      "capabilities": { "nonInteractiveArgs": ["--print"] },
+      "enabled": true
+    },
+    "codex": {
+      "command": "codex",
+      "subcommand": "exec",
+      "args": ["--disable", "plugins"],
+      "capabilities": { "localImagePaths": true }
+    },
+    "cursor": {
+      "command": "cursor-agent",
+      "timeoutMs": 1200000,
+      "capabilities": {
+        "nonInteractiveArgs": ["--print", "--trust", "--force"],
+        "workspaceArg": "--workspace",
+        "resumeArgs": ["--continue"],
+        "localImagePaths": true,
+        "output": {
+          "protocol": "json-lines",
+          "args": ["--output-format", "stream-json", "--stream-partial-output"]
+        }
+      }
+    },
     "agy": {
       "command": "agy",
-      "args": ["--dangerously-skip-permissions", "--print"]
+      "capabilities": {
+        "nonInteractiveArgs": ["--dangerously-skip-permissions", "--print"],
+        "localImagePaths": true
+      }
     },
     "gemini": { "command": "gemini", "args": ["-p"] }
   },
@@ -55,6 +80,7 @@ On first run, a default config will be created at `~/.mr-rocket/config.json`:
     "mainAgent": "codex",
     "drawAgent": "agy",
     "maxIterations": 3,
+    "maxDurationMs": 1200000,
     "outputDir": "~/.mr-rocket/generated-images"
   },
   "ui": {
@@ -115,7 +141,7 @@ bun run cli issue list --state opened
 bun run tui
 ```
 
-Press `g` to open Image Studio. Enter a prompt and optional reference-image paths, then press `Ctrl+G`. The phase log updates while the main and drawing agents work. Each run streams its complete transcript to a private file under `~/.mr-rocket/logs/`; use `tail -F ~/.mr-rocket/logs/image-workflow-current.log` to follow it externally, or `Ctrl+L` to reveal the path in the TUI. `Esc` or `Ctrl+C` cancels the active agent and workflow.
+Press `g` to open Image Studio. Enter a prompt, optional reference-image paths, and per-run limits for iterations and duration, then press `Ctrl+G`. The configured limits are only defaults: each run can use 1–30 iterations and 1–60 minutes. The phase log updates while the main and drawing agents work. Each run streams its complete transcript to a private file under `~/.mr-rocket/logs/`; use `tail -F ~/.mr-rocket/logs/image-workflow-current.log` to follow it externally, or `Ctrl+L` to reveal the path in the TUI. `Esc` or `Ctrl+C` cancels the active agent and workflow.
 
 Agents can be local processes (the default transport) or remote HTTP endpoints:
 
@@ -134,6 +160,8 @@ Agents can be local processes (the default transport) or remote HTTP endpoints:
 
 HTTP agents receive `{ "prompt": string, "attachments": [{ "name", "mimeType", "data" }] }`, where `data` is base64. They return `{ "output": string, "artifacts"?: [{ "name", "data"?: base64, "url"?: string }] }`. Local drawing agents write images into the requested output directory and return `{"images":["/absolute/path.png"]}`.
 
+Local process integrations declare behavior in `capabilities`, so workflow code does not depend on agent names. `nonInteractiveArgs` are placed after ordinary `args`, `workspaceArg` binds the output workspace, `resumeArgs` enables refinement continuity, `localImagePaths` declares reference-image support, and `output.protocol: "json-lines"` extracts the final result event while still streaming progress. A custom or renamed drawing agent works when its capabilities describe the CLI correctly; omit unsupported capabilities and Mr-Rocket falls back to plain text without session resume.
+
 The drawing agent must be authenticated and provide an image-generation tool. Mr-Rocket launches it from the configured image output root, so that single folder can be trusted once regardless of where Mr-Rocket is started. For the default path, run `mkdir -p ~/.mr-rocket/generated-images && cd ~/.mr-rocket/generated-images && agy`, sign in, trust the folder, then exit. Agy needs `--dangerously-skip-permissions` because print mode cannot display tool approval prompts; this grants the drawing agent broad host access. Keep `--print` last because it consumes the next argument as its prompt. Add `"--agent", "<draw-capable-agent>"` before `--print` when an explicit drawing agent is required.
 
 Mr-Rocket runs Codex with `--disable plugins`, keeping plugin-provided skills such as Ponytail out of workflow planning and review without changing normal Codex sessions.
@@ -142,20 +170,20 @@ Mr-Rocket runs Codex with `--disable plugins`, keeping plugin-provided skills su
 
 ### GitLab Merge Requests
 
-| Command | Description |
-|----------|-------------|
-| `mr create` | Create a new merge request |
-| `mr list` | List merge requests with filters |
-| `mr approve` | Approve a merge request |
-| `mr merge` | Merge a merge request |
-| `mr show` | Show MR details |
+| Command      | Description                      |
+| ------------ | -------------------------------- |
+| `mr create`  | Create a new merge request       |
+| `mr list`    | List merge requests with filters |
+| `mr approve` | Approve a merge request          |
+| `mr merge`   | Merge a merge request            |
+| `mr show`    | Show MR details                  |
 
 ### GitLab Issues
 
-| Command | Description |
-|----------|-------------|
-| `issue create` | Create a new issue |
-| `issue list` | List issues with filters |
+| Command        | Description              |
+| -------------- | ------------------------ |
+| `issue create` | Create a new issue       |
+| `issue list`   | List issues with filters |
 
 ## Global Options
 
@@ -190,6 +218,7 @@ bun run src/index.tsx
 ## History
 
 All commands are automatically logged to `~/.mr-rocket/history.json` with:
+
 - Timestamp
 - Command arguments
 - Output

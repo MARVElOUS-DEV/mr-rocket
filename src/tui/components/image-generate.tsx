@@ -8,12 +8,19 @@ import type {
   ImageWorkflowEvent,
   ImageWorkflowLog,
 } from "../../types/image-workflow.js";
+import {
+  DEFAULT_IMAGE_MAX_DURATION_MS,
+  DEFAULT_IMAGE_MAX_ITERATIONS,
+  MAX_IMAGE_MAX_ITERATIONS,
+  MIN_IMAGE_MAX_ITERATIONS,
+} from "../../types/image-workflow.js";
 import { saveClipboardImage } from "../../utils/clipboard-image.js";
 import { singleLineKeyBindings } from "../../utils/textarea-helper.js";
 import { imageGenerationWorkflow } from "../../workflows/image-generation.js";
 import { getStore } from "../store.js";
 
-type RunState = "idle" | "running" | "completed" | "cancelled" | "failed";
+type RunState =
+  "idle" | "running" | "completed" | "partial" | "cancelled" | "failed";
 const LOG_SCROLL_KEYS = new Set([
   "up",
   "down",
@@ -24,11 +31,31 @@ const LOG_SCROLL_KEYS = new Set([
   "home",
   "end",
 ]);
+const MIN_DURATION_MINUTES = 1;
+const MAX_DURATION_MINUTES = 60;
+
+function parseRunLimit(
+  value: string,
+  label: string,
+  minimum: number,
+  maximum: number,
+): number {
+  if (!/^\d+$/.test(value)) {
+    throw new Error(`${label} must be a whole number`);
+  }
+  const parsed = Number(value);
+  if (parsed < minimum || parsed > maximum) {
+    throw new Error(`${label} must be from ${minimum} to ${maximum}`);
+  }
+  return parsed;
+}
 
 export function ImageGenerate() {
   const store = getStore();
   const promptRef = useRef<TextareaRenderable>(null);
   const referencesRef = useRef<TextareaRenderable>(null);
+  const maxIterationsRef = useRef<TextareaRenderable>(null);
+  const maxDurationRef = useRef<TextareaRenderable>(null);
   const logsRef = useRef<ScrollBoxRenderable>(null);
   const controllerRef = useRef<AbortController | undefined>(undefined);
   const config = configManager.getConfig().imageGeneration;
@@ -66,6 +93,31 @@ export function ImageGenerate() {
       .split(/[\n,]/)
       .map((path) => path.trim())
       .filter(Boolean);
+    let maxIterations: number;
+    let maxDurationMinutes: number;
+    try {
+      maxIterations = parseRunLimit(
+        maxIterationsRef.current?.plainText?.trim() ||
+          String(config?.maxIterations ?? DEFAULT_IMAGE_MAX_ITERATIONS),
+        "Maximum iterations",
+        MIN_IMAGE_MAX_ITERATIONS,
+        MAX_IMAGE_MAX_ITERATIONS,
+      );
+      maxDurationMinutes = parseRunLimit(
+        maxDurationRef.current?.plainText?.trim() ||
+          String(
+            Math.ceil(
+              (config?.maxDurationMs ?? DEFAULT_IMAGE_MAX_DURATION_MS) / 60_000,
+            ),
+          ),
+        "Maximum duration",
+        MIN_DURATION_MINUTES,
+        MAX_DURATION_MINUTES,
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+      return;
+    }
 
     const controller = new AbortController();
     controllerRef.current = controller;
@@ -82,11 +134,12 @@ export function ImageGenerate() {
         {
           prompt,
           referenceImages: references,
+          maxIterations,
+          maxDurationMs: maxDurationMinutes * 60_000,
         },
         {
           signal: controller.signal,
-          onEvent: (event) =>
-            setEvents((current) => [...current, event]),
+          onEvent: (event) => setEvents((current) => [...current, event]),
           onAgentOutput: (log) => {
             const text = stripVTControlCharacters(log.text).replaceAll(
               "\r",
@@ -108,7 +161,14 @@ export function ImageGenerate() {
         },
       );
       setImages(result.images);
-      setState("completed");
+      if (result.verified) {
+        setState("completed");
+      } else {
+        setError(
+          `Best candidate returned without full verification: ${result.feedback.join(" · ")}`,
+        );
+        setState("partial");
+      }
     } catch (cause) {
       if (cause instanceof Error && cause.name === "AbortError") {
         setState("cancelled");
@@ -134,7 +194,7 @@ export function ImageGenerate() {
   };
 
   useKeyboard((key) => {
-    const logsFocused = state === "running" || focus === 2;
+    const logsFocused = state === "running" || focus === 4;
     if (logsFocused && LOG_SCROLL_KEYS.has(key.name)) {
       setFollowLogs(key.name === "end");
     }
@@ -152,7 +212,7 @@ export function ImageGenerate() {
     if (key.name === "escape") {
       store.dispatch({ type: "NAVIGATE", screen: "dashboard" });
     } else if (key.name === "tab") {
-      setFocus((current) => (current + 1) % 3);
+      setFocus((current) => (current + 1) % 5);
     } else if (key.ctrl && key.name === "g") {
       void start();
     } else if (key.ctrl && key.name === "p") {
@@ -175,7 +235,7 @@ export function ImageGenerate() {
         <text attributes={TextAttributes.BOLD}>Realistic Image Studio</text>
         <text attributes={TextAttributes.DIM}>
           {config
-            ? `${config.mainAgent} → ${config.drawAgent} · max ${config.maxIterations ?? 3}`
+            ? `${config.mainAgent} → ${config.drawAgent} · per-run limits below`
             : "Not configured"}
         </text>
       </box>
@@ -214,6 +274,50 @@ export function ImageGenerate() {
         </box>
       </box>
 
+      <box flexDirection="row" gap={1} flexShrink={0}>
+        <box flexDirection="column" flexGrow={1}>
+          <text attributes={TextAttributes.DIM}>
+            Maximum iterations ({MIN_IMAGE_MAX_ITERATIONS}–
+            {MAX_IMAGE_MAX_ITERATIONS})
+          </text>
+          <box
+            style={{ border: true, height: 3 }}
+            borderColor={focus === 2 ? "cyan" : "gray"}
+          >
+            <textarea
+              ref={maxIterationsRef}
+              focused={focus === 2 && state !== "running"}
+              keyBindings={singleLineKeyBindings}
+              initialValue={String(
+                config?.maxIterations ?? DEFAULT_IMAGE_MAX_ITERATIONS,
+              )}
+            />
+          </box>
+        </box>
+        <box flexDirection="column" flexGrow={1}>
+          <text attributes={TextAttributes.DIM}>
+            Maximum duration in minutes ({MIN_DURATION_MINUTES}–
+            {MAX_DURATION_MINUTES})
+          </text>
+          <box
+            style={{ border: true, height: 3 }}
+            borderColor={focus === 3 ? "cyan" : "gray"}
+          >
+            <textarea
+              ref={maxDurationRef}
+              focused={focus === 3 && state !== "running"}
+              keyBindings={singleLineKeyBindings}
+              initialValue={String(
+                Math.ceil(
+                  (config?.maxDurationMs ?? DEFAULT_IMAGE_MAX_DURATION_MS) /
+                    60_000,
+                ),
+              )}
+            />
+          </box>
+        </box>
+      </box>
+
       <box
         flexDirection="column"
         borderStyle="rounded"
@@ -232,7 +336,7 @@ export function ImageGenerate() {
         <text attributes={TextAttributes.BOLD}>Workflow · {state}</text>
         <scrollbox
           ref={logsRef}
-          focused={state === "running" || focus === 2}
+          focused={state === "running" || focus === 4}
           style={{
             flexGrow: 1,
             stickyScroll: true,

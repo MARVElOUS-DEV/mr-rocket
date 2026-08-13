@@ -4,6 +4,32 @@ interface AgentConfigBase {
   timeoutMs?: number;
 }
 
+export interface JsonLinesOutputConfig {
+  protocol: "json-lines";
+  /** Arguments that enable this output protocol. */
+  args?: string[];
+  /** Event discriminator and result field. Defaults to "result" for both. */
+  resultEventType?: string;
+  resultField?: string;
+}
+
+export interface TextOutputConfig {
+  protocol: "text";
+  args?: string[];
+}
+
+export interface ProcessAgentCapabilities {
+  /** Arguments required for unattended execution, appended after normal args. */
+  nonInteractiveArgs?: string[];
+  /** CLI option placed before the working-directory path. */
+  workspaceArg?: string;
+  /** Arguments used to resume the latest session in the workspace. */
+  resumeArgs?: string[];
+  /** Whether prompts may reference readable local image paths. Defaults to true. */
+  localImagePaths?: boolean;
+  output?: JsonLinesOutputConfig | TextOutputConfig;
+}
+
 export interface ProcessAgentConfig extends AgentConfigBase {
   transport?: "process";
   command: string;
@@ -14,6 +40,7 @@ export interface ProcessAgentConfig extends AgentConfigBase {
    * Default is false, matching commands like `codex exec <prompt>`.
    */
   promptStdin?: boolean;
+  capabilities?: ProcessAgentCapabilities;
 }
 
 export interface HttpAgentConfig extends AgentConfigBase {
@@ -36,5 +63,6 @@ export interface AgentResult {
   stderr?: string;
   exitCode: number | null;
   duration: number;
+  timedOut?: boolean;
   artifacts?: string[];
 }

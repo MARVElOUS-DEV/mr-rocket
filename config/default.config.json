@@ -18,25 +18,37 @@
   "agents": {
     "cursor": {
       "command": "cursor-agent",
-      "args": ["--print", "--trust"]
+      "timeoutMs": 1200000,
+      "capabilities": {
+        "nonInteractiveArgs": ["--print", "--trust", "--force"],
+        "workspaceArg": "--workspace",
+        "resumeArgs": ["--continue"],
+        "localImagePaths": true,
+        "output": {
+          "protocol": "json-lines",
+          "args": ["--output-format", "stream-json", "--stream-partial-output"]
+        }
+      }
     },
     "codex": {
       "command": "codex",
       "subcommand": "exec",
-      "args": ["--disable", "plugins"]
+      "args": ["--disable", "plugins"],
+      "capabilities": { "localImagePaths": true }
     },
     "agy": {
       "command": "agy",
-      "args": [
-        "--dangerously-skip-permissions",
-        "--print"
-      ]
+      "capabilities": {
+        "nonInteractiveArgs": ["--dangerously-skip-permissions", "--print"],
+        "localImagePaths": true
+      }
     }
   },
   "imageGeneration": {
     "mainAgent": "codex",
     "drawAgent": "agy",
-    "maxIterations": 30,
+    "maxIterations": 3,
+    "maxDurationMs": 1200000,
     "outputDir": "~/.mr-rocket/generated-images"
   },
   "ui": {
